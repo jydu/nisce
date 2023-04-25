@@ -39,7 +39,13 @@ IF(Boost_FOUND)
   MESSAGE("   libraries: ${Boost_LIBRARIES}")
 ENDIF()
 
-SET(LIBS ${LIBS} "-ltbb")
+FIND_PACKAGE( TBB REQUIRED )
+
+IF(TBB_FOUND)
+  INCLUDE_DIRECTORIES(${tbb_INCLUDE_DIRS})
+  SET(LIBS ${LIBS} TBB::tbb)
+  MESSAGE("-- TBB libraries found.")
+ENDIF()
 
 # Subdirectories
 ADD_SUBDIRECTORY(Nisce)
