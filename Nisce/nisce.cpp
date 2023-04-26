@@ -356,7 +356,7 @@ public:
       return distParamValues_[i][0];
     } else if (model_ == "ScaledBeta") {
       //This is scale * alpha / (alpha + beta)
-      return distParamValues_[i][0] * distParamNames_[i][1] / (distParamValues_[i][1] + distParamValues_[i][2]);
+      return distParamValues_[i][0] * distParamValues_[i][1] / (distParamValues_[i][1] + distParamValues_[i][2]);
     }
     throw Exception("Unsupported model: " + model_);
   }
@@ -367,7 +367,7 @@ public:
       return 1. / distParamValues_[i][1];
     } else if (model_ == "ScaledBeta") {
       //This is beta / (alpha * (alpha + beta + 1))
-      return distParamNames_[i][2] / (distParamValues_[i][1] * (distParamValues_[i][1] + distParamValues_[i][2] + 1.));
+      return distParamValues_[i][2] / (distParamValues_[i][1] * (distParamValues_[i][1] + distParamValues_[i][2] + 1.));
     }
     throw Exception("Unsupported model: " + model_);
   }
