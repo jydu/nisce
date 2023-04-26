@@ -384,7 +384,7 @@ public:
       out << geneIds_[i] << "," << rs_[i];
       for (auto p : distParamValues_[i])
         out << "," << p;
-      out << getLogLikelihoodForGene(i) << "," << static_cast<double>(nbDistParams_ + 1) << "," << getAicForGene(i) << endl;
+      out << "," << getLogLikelihoodForGene(i) << "," << static_cast<double>(nbDistParams_ + 1) << "," << getAicForGene(i) << endl;
     }
   }
 
@@ -520,6 +520,7 @@ d2_array_ui readCounts(istream& input, d1_array_str& geneIds, d1_array_str& cell
   getline(input, line); // Skip header
   stringstream headerStream(line);
   string value;
+  getline(headerStream, value, sep); //Remove gene id col header (might just be empty).
   while (getline(headerStream, value, sep))
   {
     cellIds.push_back(value);
@@ -529,6 +530,8 @@ d2_array_ui readCounts(istream& input, d1_array_str& geneIds, d1_array_str& cell
   {
     stringstream lineStream(line);
     d1_array_ui row;
+    getline(lineStream, value, sep);
+    geneIds.push_back(value); // Add gene id
     while (getline(lineStream, value, sep))
     {
       stringstream valueStream(value);
@@ -538,7 +541,6 @@ d2_array_ui readCounts(istream& input, d1_array_str& geneIds, d1_array_str& cell
     }
     if (row.size() == nbCells)
     {
-      row.erase(row.begin(), row.begin() + 1); // Remove gene names.
       counts.push_back(row);
     }
     else
@@ -598,13 +600,13 @@ int main(int argc, char* argv[])
 
     // Discard empty genes:
     ApplicationTools::displayTask("Filter 'empty' genes");
-    size_t minGeneObs = ApplicationTools::getParameter<size_t>("min_nb_genes_with_obs", nisce.getParams(), 1);
+    size_t minGeneObs = ApplicationTools::getParameter<size_t>("min_nb_cells_with_obs", nisce.getParams(), 1);
     if (minGeneObs < 1)
       throw Exception("Minimum number of observations per gene must be at least 1.");
     unsigned int geneCount = 0;
     for (size_t i = counts.size(); i > 0; --i)
     {
-      size_t s = counts[0].size() - accumulate(counts[i - 1].begin(), counts[i - 1].end(), 0u);
+      size_t s = counts[0].size() - count(counts[i - 1].begin(), counts[i - 1].end(), 0);
       if (s < minGeneObs)
       {
         // cout << "Gene " << i << " has " << s << " counts only and was discarded." << endl;
