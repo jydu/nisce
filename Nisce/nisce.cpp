@@ -48,6 +48,7 @@
 #include <Bpp/Numeric/Function/BrentOneDimension.h>
 #include <Bpp/App/ApplicationTools.h>
 #include <Bpp/App/BppApplication.h>
+#include <Bpp/Exceptions.h>
 
 using namespace std;
 using namespace bpp;
@@ -57,6 +58,7 @@ using d1_array_ui = vector<unsigned int>;
 using d3_array_dbl = vector<vector<vector<double> > >;
 using d2_array_dbl = vector<vector<double> >;
 using d1_array_dbl = vector<double>;
+using d1_array_str = vector<string>;
 
 // LogSumExp function, https://stackoverflow.com/questions/45943750/calculating-log-sum-exp-function-in-c
 template<typename Iter>
@@ -90,6 +92,8 @@ class SGEModel
 {
 public:
   d2_array_ui counts_;
+  d1_array_str geneIds_;
+  d1_array_str cellIds_;
   size_t nbGenes_;
   size_t nbCells_;
   string model_;
@@ -108,9 +112,13 @@ public:
 public:
   SGEModel(
     const d2_array_ui& counts,
+    const d1_array_str& geneIds,
+    const d1_array_str& cellIds,
     const string& model,
     size_t nbCategories) :
     counts_(counts),
+    geneIds_(geneIds),
+    cellIds_(cellIds),
     nbGenes_(counts.size()),
     nbCells_(nbGenes_ == 0 ? 0 : counts[0].size()),
     model_(model),
@@ -147,8 +155,7 @@ public:
     }
     else
     {
-      cerr << "Unknown model: -->" << model << "<--." << endl;
-      throw exception();
+      throw Exception("Unsupported model: " + model_);
     }
     for (auto& a : distParamValues_)
     {
@@ -180,8 +187,7 @@ public:
       computeCategoriesGamma_(geneIndex, params);
       return;
     }
-    cerr << "Unknown model: -->" << model_ << "<--." << endl;
-    throw exception();
+    throw Exception("Unsupported model: " + model_);
   }
 
   /**
@@ -220,31 +226,6 @@ public:
     out << "-----------------------------------------------------------------" << endl;
   }
 
-  void printGeneParameters(ostream& out) const
-  {
-    out << "Gene,r";
-    for (auto p : distParamNames_)
-      out << "," << p;
-    out << endl;
-
-    for (size_t i = 0; i < nbGenes_; ++i)
-    {
-      out << i << "," << rs_[i];
-      for (auto p : distParamValues_[i])
-        out << "," << p;
-      out << endl;
-    }
-  }
-
-  void printCellParameters(ostream& out) const
-  {
-    out << "Cell,l" << endl;
-    for (size_t j = 0; j < nbCells_; ++j)
-    {
-      out << j << "," << ls_[j] << endl;
-    }
-  }
-
   /**
    * @brief Likelihood calculations
    */
@@ -257,7 +238,7 @@ public:
       d1_array_dbl s(nbCategories_);
       for (size_t k = 0; k < nbCategories_; ++k)
       {
-        s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] * ls_[j]) * distArray_[i][k][1];
+        s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] / ls_[j]) * distArray_[i][k][1];
       }
       auto S = accumulate(s.begin(), s.end(), 0.);
       double P;
@@ -281,8 +262,8 @@ public:
         d1_array_dbl s(nbCategories_);
         for (size_t k = 0; k < nbCategories_; ++k)
         {
-          s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] * ls_[j]) * distArray_[i][k][1];
-          cout << k << ", counts = " << counts_[i][j] << ", distArray = " << distArray_[i][k][0] <<  ", dpoisson = " << dpoisson(counts_[i][j], distArray_[i][k][0] * ls_[j]) << endl;
+          s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] / ls_[j]) * distArray_[i][k][1];
+          cout << k << ", counts = " << counts_[i][j] << ", distArray = " << distArray_[i][k][0] <<  ", dpoisson = " << dpoisson(counts_[i][j], distArray_[i][k][0] / ls_[j]) << endl;
         }
         auto S = accumulate(s.begin(), s.end(), 0.);
         double P;
@@ -312,7 +293,7 @@ public:
       d1_array_dbl s(nbCategories_);
       for (size_t k = 0; k < nbCategories_; ++k)
       {
-        s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] * l) * distArray_[i][k][1];
+        s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] / l) * distArray_[i][k][1];
       }
       auto S = accumulate(s.begin(), s.end(), 0.);
       double P;
@@ -337,8 +318,8 @@ public:
         d1_array_dbl s(nbCategories_);
         for (size_t k = 0; k < nbCategories_; ++k)
         {
-          s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] * l) * distArray_[i][k][1];
-          cout << k << ", counts = " << counts_[i][j] << ", disrArray = " << distArray_[i][k][0] <<  ", dpoisson = " << dpoisson(counts_[i][j], distArray_[i][k][0] * l) << endl;
+          s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] / l) * distArray_[i][k][1];
+          cout << k << ", counts = " << counts_[i][j] << ", disrArray = " << distArray_[i][k][0] <<  ", dpoisson = " << dpoisson(counts_[i][j], distArray_[i][k][0] / l) << endl;
         }
         auto S = accumulate(s.begin(), s.end(), 0.);
         double P;
@@ -360,6 +341,72 @@ public:
     }
     return logLikelihood;
   }
+
+  double getLogLikelihoodForGene(size_t i) const {
+    return const_cast<SGEModel*>(this)->computeLogLikelihoodForGene(i, rs_[i], distParamValues_[i]); //Actually ok to do so here, since we are not modifying the object.
+  }
+
+  double getAicForGene(size_t i) const {
+    return 2. * static_cast<double>(nbDistParams_ + 1) - 2. * getLogLikelihoodForGene(i); //Needs to account for r too (hence the +1).
+  }
+
+  double getMeanForGene(size_t i) const {
+    if (model_ == "Gamma") {
+      //This is the mean parameter:
+      return distParamValues_[i][0];
+    } else if (model_ == "ScaledBeta") {
+      //This is scale * alpha / (alpha + beta)
+      return distParamValues_[i][0] * distParamNames_[i][1] / (distParamValues_[i][1] + distParamValues_[i][2]);
+    }
+    throw Exception("Unsupported model: " + model_);
+  }
+
+  double getNoiseForGene(size_t i) const {
+    if (model_ == "Gamma") {
+      //This is 1/ shape
+      return 1. / distParamValues_[i][1];
+    } else if (model_ == "ScaledBeta") {
+      //This is beta / (alpha * (alpha + beta + 1))
+      return distParamNames_[i][2] / (distParamValues_[i][1] * (distParamValues_[i][1] + distParamValues_[i][2] + 1.));
+    }
+    throw Exception("Unsupported model: " + model_);
+  }
+
+  void printGeneParameters(ostream& out) const
+  {
+    out << "Gene,r";
+    for (auto p : distParamNames_)
+      out << "," << p;
+    out << ",logLk,nbParam,AIC" << endl;
+
+    for (size_t i = 0; i < nbGenes_; ++i)
+    {
+      out << geneIds_[i] << "," << rs_[i];
+      for (auto p : distParamValues_[i])
+        out << "," << p;
+      out << getLogLikelihoodForGene(i) << "," << static_cast<double>(nbDistParams_ + 1) << "," << getAicForGene(i) << endl;
+    }
+  }
+
+  void printCellParameters(ostream& out) const
+  {
+    out << "Cell,l" << endl;
+    for (size_t j = 0; j < nbCells_; ++j)
+    {
+      out << cellIds_[j] << "," << ls_[j] << endl;
+    }
+  }
+
+  void printResultsForGenes(ostream& out) const
+  {
+    out << "Gene,Mean,Noise" << endl;
+
+    for (size_t i = 0; i < nbGenes_; ++i)
+    {
+      out << geneIds_[i] << "," << getMeanForGene(i) << "," << getNoiseForGene(i) << endl;
+    }
+  }
+
 
 private:
   void computeCategoriesScaledBeta_(size_t geneIndex, const d1_array_dbl& params)
@@ -464,16 +511,23 @@ public:
   }
 };
 
-d2_array_ui readCounts(istream& input, char sep = ',')
+d2_array_ui readCounts(istream& input, d1_array_str& geneIds, d1_array_str& cellIds, char sep = ',')
 {
+  geneIds.resize(0);
+  cellIds.resize(0);
   d2_array_ui counts;
-  size_t nbCells = 0;
   string line;
   getline(input, line); // Skip header
+  stringstream headerStream(line);
+  string value;
+  while (getline(headerStream, value, sep))
+  {
+    cellIds.push_back(value);
+  }
+  size_t nbCells = cellIds.size();
   while (getline(input, line))
   {
     stringstream lineStream(line);
-    string value;
     d1_array_ui row;
     while (getline(lineStream, value, sep))
     {
@@ -481,10 +535,6 @@ d2_array_ui readCounts(istream& input, char sep = ',')
       unsigned int count;
       valueStream >> count;
       row.push_back(count);
-    }
-    if (nbCells == 0)
-    {
-      nbCells = row.size();
     }
     if (row.size() == nbCells)
     {
@@ -530,10 +580,13 @@ int main(int argc, char* argv[])
     nisce.startTimer();
 
     string inputPath = ApplicationTools::getAFilePath("input.file", nisce.getParams(), true, true);
+    char sep = ApplicationTools::getParameter<char>("input.file.column_separator", nisce.getParams(), ',');
 
     // Read the counts:
     ifstream inputFile(inputPath, ios::in);
-    auto counts = readCounts(inputFile);
+    vector<string> geneIds;
+    vector<string> cellIds;
+    auto counts = readCounts(inputFile, geneIds, cellIds, sep);
     if (counts.size() == 0)
     {
       cout << "Error, file " << argv[1] << " seems to contain no data." << endl;
@@ -545,28 +598,31 @@ int main(int argc, char* argv[])
 
     // Discard empty genes:
     ApplicationTools::displayTask("Filter 'empty' genes");
-    unsigned int cellCount = 0;
+    size_t minGeneObs = ApplicationTools::getParameter<size_t>("min_nb_genes_with_obs", nisce.getParams(), 1);
+    if (minGeneObs < 1)
+      throw Exception("Minimum number of observations per gene must be at least 1.");
+    unsigned int geneCount = 0;
     for (size_t i = counts.size(); i > 0; --i)
     {
-      unsigned int s = accumulate(counts[i - 1].begin(), counts[i - 1].end(), 0u);
-      if (s == 0)
+      size_t s = counts[0].size() - accumulate(counts[i - 1].begin(), counts[i - 1].end(), 0u);
+      if (s < minGeneObs)
       {
-        // cout << "Gene " << i << " has 0 counts only and was discarded." << endl;
+        // cout << "Gene " << i << " has " << s << " counts only and was discarded." << endl;
         counts.erase(counts.begin() + static_cast<ptrdiff_t>(i) - 1, counts.begin() + static_cast<ptrdiff_t>(i));
-        cellCount++;
+        geneIds.erase(geneIds.begin() + static_cast<ptrdiff_t>(i) - 1, geneIds.begin() + static_cast<ptrdiff_t>(i));
+        geneCount++;
       }
     }
     ApplicationTools::displayTaskDone();
-    ApplicationTools::displayResult("Number of discarded genes", cellCount);
+    ApplicationTools::displayResult("Number of discarded genes", geneCount);
 
-    // discard empty cells:
+    // Discard empty cells:
     ApplicationTools::displayTask("Filter 'empty' cells");
     vector<ptrdiff_t> cellsToDiscard;
     for (size_t j = 0; j < counts[0].size(); ++j)
     {
       size_t i;
-      for (i = 0; i < counts.size() && counts[i][j] == 0; ++i)
-      {}
+      for (i = 0; i < counts.size() && counts[i][j] == 0; ++i) {}
       if (i == counts.size())
         cellsToDiscard.push_back(static_cast<ptrdiff_t>(j));
     }
@@ -575,6 +631,7 @@ int main(int argc, char* argv[])
       for (auto it = cellsToDiscard.rbegin(); it != cellsToDiscard.rend(); ++it)
       {
         v.erase(v.begin() + *it, v.begin() + *it + 1);
+        cellIds.erase(cellIds.begin() + *it, cellIds.begin() + *it + 1);
       }
     }
     ApplicationTools::displayTaskDone();
@@ -585,7 +642,7 @@ int main(int argc, char* argv[])
     size_t nbCategories = ApplicationTools::getParameter<size_t>("nb_categories", nisce.getParams(), 5);
 
     // Create the data structure:
-    auto sgeModel = make_shared<SGEModel>(counts, model, nbCategories);
+    auto sgeModel = make_shared<SGEModel>(counts, geneIds, cellIds, model, nbCategories);
     sgeModel->print(cout);
     sgeModel->initParameters();
 
@@ -642,7 +699,7 @@ int main(int argc, char* argv[])
     });
     ApplicationTools::displayTaskDone();
 
-    string outputGenes1 = ApplicationTools::getAFilePath("output.genes1.file", nisce.getParams(), false, false);
+    string outputGenes1 = ApplicationTools::getAFilePath("output.parameters.genes1.file", nisce.getParams(), false, false);
     if (outputGenes1 != "none") {
       ofstream streamGenes1(outputGenes1, ios::out);
       sgeModel->printGeneParameters(streamGenes1);
@@ -678,7 +735,7 @@ int main(int argc, char* argv[])
     });
     ApplicationTools::displayTaskDone();
 
-    string outputCells1 = ApplicationTools::getAFilePath("output.cells1.file", nisce.getParams(), false, false);
+    string outputCells1 = ApplicationTools::getAFilePath("output.parameters.cells1.file", nisce.getParams(), false, false);
     if (outputCells1 != "none") {
       ofstream streamCells1(outputCells1, ios::out);
       sgeModel->printCellParameters(streamCells1);
@@ -711,11 +768,18 @@ int main(int argc, char* argv[])
     });
     ApplicationTools::displayTaskDone();
 
-    string outputGenes2 = ApplicationTools::getAFilePath("output.genes2.file", nisce.getParams(), false, false);
+    string outputGenes2 = ApplicationTools::getAFilePath("output.parameters.genes2.file", nisce.getParams(), false, false);
     if (outputGenes2 != "none") {
       ofstream streamGenes2(outputGenes2, ios::out);
       sgeModel->printGeneParameters(streamGenes2);
       streamGenes2.close();
+    }
+
+    string outputGeneResult = ApplicationTools::getAFilePath("output.results.genes.file", nisce.getParams(), false, false);
+    if (outputGenes2 != "none") {
+      ofstream streamGeneResults(outputGeneResult, ios::out);
+      sgeModel->printResultsForGenes(streamGeneResults);
+      streamGeneResults.close();
     }
 
     nisce.done();
@@ -729,5 +793,5 @@ int main(int argc, char* argv[])
   return 0;
 }
 
-// optimize library scales
-// output estimates
+//TODO
+//- in final step, compute both gamma and beta and keep for each gene the one with lowest AIC?? => output logLik per gene!
