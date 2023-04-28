@@ -1,0 +1,26 @@
+DATA=MyData
+
+//Input:
+input.file =  
+input.file.column_separator = , 
+min_nb_cells_with_obs = 10
+
+//Model:
+gene_distribution = Gamma //ScaledBeta
+nb_categories = 10
+
+PREFIX=$(DATA)_$(gene_distribution)_$(nb_categories)
+
+//Optimization:
+message_handler = $(PREFIX)_optimization_messages.log
+profiler =  $(PREFIX)_optimization_profile.log
+tolerance1 = 0.01
+tolerance2 = 0.0001
+tolerance3 = 0.000001
+
+//Output:
+output.parameters.genes1.file = $(PREFIX)_gene_pamameters_coarse.csv
+output.parameters.cells1.file = $(PREFIX)_cell_pamameters.csv
+output.parameters.genes2.file = $(PREFIX)_gene_pamameters_final.csv
+output.results.genes.file = $(PREFIX)_gene_results.csv
+
