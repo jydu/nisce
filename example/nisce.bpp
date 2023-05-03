@@ -6,21 +6,30 @@ input.file.column_separator = ,
 min_nb_cells_with_obs = 10
 
 //Model:
+method = ML
 gene_distribution = Gamma //ScaledBeta
-nb_categories = 10
+nb_categories = 5
+nb_mean_categories = 5
+nb_shape_categories = 5
 
-PREFIX=$(DATA)_$(gene_distribution)_$(nb_categories)
+PREFIX=$(DATA)_$(method)
 
 //Optimization:
 message_handler = $(PREFIX)_optimization_messages.log
 profiler =  $(PREFIX)_optimization_profile.log
 tolerance1 = 0.01
-tolerance2 = 0.0001
-tolerance3 = 0.000001
+tolerance2 = 0.01
+tolerance3 = 0.001
 
 //Output:
-output.parameters.genes1.file = $(PREFIX)_gene_pamameters_coarse.csv
+output.parameters.genes1.file = $(PREFIX)_gene_pamameters.csv
 output.parameters.cells1.file = $(PREFIX)_cell_pamameters.csv
+
+//ML method:
 output.parameters.genes2.file = $(PREFIX)_gene_pamameters_final.csv
 output.results.genes.file = $(PREFIX)_gene_results.csv
+
+//EB method:
+output.results.mean.file = $(PREFIX)_mean_results.csv
+output.results.noise.file = $(PREFIX)_noise_results.csv
 
