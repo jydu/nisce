@@ -54,5 +54,18 @@ double dpoisson(unsigned int x, double lambda)
   return max(p, std::numeric_limits< double >::min());
 }
 
+template<class T>
+class NumberResult
+{
+public:
+  T value;
+  T score;
+
+  NumberResult(T v, T s):
+    value(v),
+    score(s)
+  {}
+};
+
 #endif //_PROB_FUNCTIONS_H_
 

@@ -6,11 +6,9 @@ input.file.column_separator = ,
 min_nb_cells_with_obs = 10
 
 //Model:
-method = ML
-gene_distribution = Gamma //ScaledBeta
-nb_categories = 5
-nb_mean_categories = 5
-nb_shape_categories = 5
+method = 
+//Number of discrete categories to modulate the Poisson process:
+nb_categories = 10
 
 PREFIX=$(DATA)_$(method)
 
@@ -19,17 +17,20 @@ message_handler = $(PREFIX)_optimization_messages.log
 profiler =  $(PREFIX)_optimization_profile.log
 tolerance1 = 0.01
 tolerance2 = 0.01
-tolerance3 = 0.001
+tolerance3 = 0.01
 
 //Output:
 output.parameters.genes1.file = $(PREFIX)_gene_pamameters.csv
 output.parameters.cells1.file = $(PREFIX)_cell_pamameters.csv
-
-//ML method:
-output.parameters.genes2.file = $(PREFIX)_gene_pamameters_final.csv
 output.results.genes.file = $(PREFIX)_gene_results.csv
 
+//FP method:
+gene_distribution = Gamma //ScaledBeta
+output.parameters.genes2.file = $(PREFIX)_gene_pamameters_final.csv
+
 //EB method:
+nb_mean_categories = 10
+nb_shape_categories = 10
 output.results.mean.file = $(PREFIX)_mean_results.csv
 output.results.noise.file = $(PREFIX)_noise_results.csv
 

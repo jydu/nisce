@@ -206,7 +206,7 @@ int main(int argc, char* argv[])
       messenger->setPrecision(20);
     ApplicationTools::displayResult("-- Optimization messages in", mhPath);
 
-    if (method == "ML")
+    if (method == "FP" || method == "FreeParameters")
     {
       // Initialize parameters:
       string model = ApplicationTools::getStringParameter("gene_distribution", nisce.getParams(), "ScaledBeta");
@@ -329,15 +329,15 @@ int main(int argc, char* argv[])
         streamGenes2.close();
       }
 
-      string outputGeneResult = ApplicationTools::getAFilePath("output.results.genes.file", nisce.getParams(), false, false);
-      if (outputGenes2 != "none")
+      string outputGeneResults = ApplicationTools::getAFilePath("output.results.genes.file", nisce.getParams(), false, false);
+      if (outputGeneResults != "none")
       {
-        ofstream streamGeneResults(outputGeneResult, ios::out);
+        ofstream streamGeneResults(outputGeneResults, ios::out);
         sgeModel->printResultsForGenes(streamGeneResults);
         streamGeneResults.close();
       }
     }
-    else if (method == "EB")
+    else if (method == "EB" || method == "EmpiricalBayesian")
     {
       size_t nbMeanCategories = ApplicationTools::getParameter<size_t>("nb_mean_categories", nisce.getParams(), 5);
       size_t nbShapeCategories = ApplicationTools::getParameter<size_t>("nb_shape_categories", nisce.getParams(), 5);
@@ -453,6 +453,14 @@ int main(int argc, char* argv[])
       sgeModel->printHyperParameters(cout);
       
       // Print estimates of mean and noise:
+      string outputGeneResults = ApplicationTools::getAFilePath("output.results.genes.file", nisce.getParams(), false, false);
+      if (outputGeneResults != "none")
+      {
+        ofstream streamGeneResults(outputGeneResults, ios::out);
+        sgeModel->printResultsForGenes(streamGeneResults);
+        streamGeneResults.close();
+      }
+
       string outputResultMean = ApplicationTools::getAFilePath("output.results.mean.file", nisce.getParams(), false, false);
       ApplicationTools::displayResult("Results for expression mean in", outputResultMean);
       if (outputResultMean != "none")

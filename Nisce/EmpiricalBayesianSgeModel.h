@@ -6,7 +6,13 @@
  * =====================================================================================
  */
 
+#ifndef _EMPIRICAL_BAYESIAN_SGE_MODEL_H_
+#define _EMPIRICAL_BAYESIAN_SGE_MODEL_H_
+
+
 #include "ProbFunctions.h"
+
+#include <limits>
 
 // Only supports Gamma model. We assume all counts to share independent Gammas, but we could inforce a single one (like ASRV vs SSRV phylogenetic models).
 class EmpiricalBayesianSgeModel
@@ -138,7 +144,70 @@ public:
   /**
    * @brief Likelihood calculations
    */
+  double computeLogLikelihoodForGeneForClass(size_t i, double r, size_t meanClass, size_t shapeClass)
+  {
+    double conditionalLogLikelihood = 0.;
+    for (size_t j = 0; j < nbCells_; ++j)
+    {
+      double l = ls_[j];
+      d1_array_dbl s(nbCategories_);
+      for (size_t k = 0; k < nbCategories_; ++k)
+      {
+        s[k] = dpoisson(counts_[i][j], distArray_[meanClass * nbMeanCategories_ + shapeClass][k][0] * l) * distArray_[meanClass * nbMeanCategories_ + shapeClass][k][1];
+      }
+      auto S = accumulate(s.begin(), s.end(), 0.);
+      double P;
+      if (counts_[i][j] == 0)
+      {
+        P = r + (1. - r) * S;
+      }
+      else
+      {
+        P = (1. - r) * S;
+      }
+      if (isnan(log(P)) || isinf(log(P)))
+      {
+        //cerr << i << "," << j << ", P=" << P << ", r=" << r << ", S=" << S << ", l = " << l << endl;
+        //VectorTools::print(s);
+	//cerr << "Hyper parameters: " << meanMean_ << "|" << shapeMean_ << "|" << meanShape_ << "|" << shapeShape_ << endl;
+        //cerr << i << "," << j << ", mean class = " << meanClass << ", shape class = " << shapeClass << endl;
+        //for (size_t k = 0; k < nbCategories_; ++k)
+        //{
+        //  cerr << i << ", " << j << ", " << k << ", count ij=" << counts_[i][j] << ", distMeanValue=" << distMeanValues_[k] << ", distShapeValue=" << distShapeValues_[k] << ", distArray0=" << distArray_[meanClass * nbMeanCategories_ + shapeClass][k][0] * l << ", distArray1=" <<  distArray_[meanClass * nbMeanCategories_ + shapeClass][k][1] << endl;
+        //}
+        //throw (Exception("Probability is 0!!!"));
+	P = numeric_limits<double>::min();
+      }
+      conditionalLogLikelihood += log(P);
+    }
+    if (isnan(conditionalLogLikelihood) || isinf(conditionalLogLikelihood))
+    {
+      throw (Exception("Conditional likelihood is 0!!!"));
+    }
+    return conditionalLogLikelihood;
+  }
+
   double computeLogLikelihoodForGene(size_t i, double r)
+  {
+    d1_array_dbl logLikelihoods(nbMeanCategories_ * nbShapeCategories_);
+    size_t z = 0;
+    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
+    {
+      for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
+      {
+        logLikelihoods[z++] = computeLogLikelihoodForGeneForClass(i, r, k1, k2) - log(static_cast<double>(nbMeanCategories_ * nbShapeCategories_));
+      }
+    }
+    double logLikelihood = logSumExp(logLikelihoods.begin(), logLikelihoods.end());
+    if (isnan(logLikelihood) || isinf(logLikelihood))
+    {
+      throw (Exception("Likelihood is 0!!!"));
+    }
+    return logLikelihood;
+  }
+
+  //an alternative version where genes have independent ditributions per gene
+  double computeLogLikelihoodForGene2(size_t i, double r)
   {
     double logLikelihood = 0.;
     for (size_t j = 0; j < nbCells_; ++j)
@@ -233,6 +302,58 @@ public:
   double getLogLikelihoodForGene(size_t i) const
   {
     return const_cast<EmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForGene(i, rs_[i]); // Actually ok to do so here, since we are not modifying the object.
+  }
+
+  NumberResult<double> getMeanForGene(size_t i) const
+  {
+    d1_array_dbl logMeanLikelihoods(nbMeanCategories_);
+    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
+    {
+      d1_array_dbl logShapeLikelihoods(nbShapeCategories_);
+      for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
+      {
+        logShapeLikelihoods[k2] = const_cast<EmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForGeneForClass(i, rs_[i], k1, k2) - log(static_cast<double>(nbMeanCategories_ * nbShapeCategories_));
+      }
+      logMeanLikelihoods[k1] = logSumExp(logShapeLikelihoods.begin(), logShapeLikelihoods.end());
+    }
+    double logLik = logSumExp(logMeanLikelihoods.begin(), logMeanLikelihoods.end());
+    double postMean = 0.;
+    double entropyMean = 0.;
+    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
+    {
+      double p = exp(logMeanLikelihoods[k1] - logLik);
+      if (p > 0) {
+        postMean += p * distMeanValues_[k1];
+        entropyMean -= p * log(p);
+      }
+    }
+    return NumberResult<double>(postMean, entropyMean);
+  }
+
+  NumberResult<double> getNoiseForGene(size_t i) const
+  {
+    d1_array_dbl logShapeLikelihoods(nbShapeCategories_);
+    for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
+    {
+      d1_array_dbl logMeanLikelihoods(nbMeanCategories_);
+      for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
+      {
+        logMeanLikelihoods[k1] = const_cast<EmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForGeneForClass(i, rs_[i], k1, k2) - log(static_cast<double>(nbMeanCategories_ * nbShapeCategories_));
+      }
+      logShapeLikelihoods[k2] = logSumExp(logMeanLikelihoods.begin(), logMeanLikelihoods.end());
+    }
+    double logLik = logSumExp(logShapeLikelihoods.begin(), logShapeLikelihoods.end());
+    double postNoise = 0.;
+    double entropyNoise = 0.;
+    for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
+    {
+      double p = exp(logShapeLikelihoods[k2] - logLik);
+      if (p > 0) {
+        postNoise += p * (1. / distShapeValues_[k2]);
+        entropyNoise -= p * log(p);
+      }
+    }
+    return NumberResult<double>(postNoise, entropyNoise);
   }
 
   double getMeanForGeneForCell(size_t i, size_t j) const
@@ -375,6 +496,18 @@ public:
     }
   }
 
+  void printResultsForGenes(ostream& out) const
+  {
+    out << "Gene,Mean,Noise,EntropyMean,EntropyNoise" << endl;
+
+    for (size_t i = 0; i < nbGenes_; ++i)
+    {
+      auto resMean = getMeanForGene(i);
+      auto resNoise = getNoiseForGene(i);
+      out << geneIds_[i] << "," << resMean.value << "," << resNoise.value << "," << resMean.score << "," << resNoise.score << endl;
+    }
+  }
+
   void printMeanResults(ostream& out) const
   {
     out << "Gene";
@@ -388,7 +521,7 @@ public:
       out << geneIds_[i];
       for (size_t j = 0; j < nbCells_; ++j)
       {
-	out << "," << getMeanForGeneForCell(i, j);
+        out << "," << getMeanForGeneForCell(i, j);
       }
       out << endl;
     }
@@ -407,7 +540,7 @@ public:
       out << geneIds_[i];
       for (size_t j = 0; j < nbCells_; ++j)
       {
-	out << "," << getNoiseForGeneForCell(i, j);
+        out << "," << getNoiseForGeneForCell(i, j);
       }
       out << endl;
     }
@@ -426,7 +559,7 @@ public:
       out << geneIds_[i];
       for (size_t j = 0; j < nbCells_; ++j)
       {
-	out << "," << getMeanEntropyForGeneForCell(i, j);
+        out << "," << getMeanEntropyForGeneForCell(i, j);
       }
       out << endl;
     }
@@ -445,7 +578,7 @@ public:
       out << geneIds_[i];
       for (size_t j = 0; j < nbCells_; ++j)
       {
-	out << "," << getNoiseEntropyForGeneForCell(i, j);
+        out << "," << getNoiseEntropyForGeneForCell(i, j);
       }
       out << endl;
     }
@@ -565,4 +698,5 @@ public:
   };
 };
 
+#endif //_EMPIRICAL_BAYESIAN_SGE_MODEL_H_
 
