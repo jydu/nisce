@@ -23,22 +23,19 @@ public:
   d1_array_str cellIds_;
   size_t nbGenes_;
   size_t nbCells_;
-  size_t nbMeanCategories_;
   size_t nbShapeCategories_;
   size_t nbCategories_;
 
   // Distribution parameters
-  double meanMean_;
-  double shapeMean_;
   double meanShape_;
   double shapeShape_;
 
-  d1_array_dbl distMeanValues_;
   d1_array_dbl distShapeValues_;
 
   d1_array_dbl rs_;           // Dropout parameters
   d1_array_dbl ls_;           // Library size parameters
-  d3_array_dbl distArray_;    // Intermediate calculations. Contains, for each param category, each lambda category, two numbers: value and probability.
+  d1_array_dbl means_;        // Gene-specific expression means
+  d3_array_dbl distArray_;    // Intermediate calculations. Contains, for each shape category, each lambda category, two numbers: value and probability.
 
   vector<size_t> geneIndex_;
 
@@ -47,7 +44,6 @@ public:
     const d2_array_ui& counts,
     const d1_array_str& geneIds,
     const d1_array_str& cellIds,
-    size_t nbMeanCategories,
     size_t nbShapeCategories,
     size_t nbCategories) :
     counts_(counts),
@@ -55,18 +51,15 @@ public:
     cellIds_(cellIds),
     nbGenes_(counts.size()),
     nbCells_(nbGenes_ == 0 ? 0 : counts[0].size()),
-    nbMeanCategories_(nbMeanCategories),
     nbShapeCategories_(nbShapeCategories),
     nbCategories_(nbCategories),
-    meanMean_(1.),
-    shapeMean_(1.),
     meanShape_(1.),
     shapeShape_(1.),
-    distMeanValues_(nbMeanCategories),
     distShapeValues_(nbShapeCategories),
     rs_(nbGenes_),
     ls_(nbCells_),
-    distArray_(nbMeanCategories * nbShapeCategories),
+    means_(nbGenes_),
+    distArray_(nbShapeCategories_),
     geneIndex_()
   {
     for (auto& a : distArray_)
@@ -90,23 +83,16 @@ public:
    */
   void computeCategories()
   {
-    for (size_t i = 0; i < nbMeanCategories_; ++i)
+    for (size_t j = 0; j < nbShapeCategories_; ++j)
     {
-      distMeanValues_[i] = meanMean_ * (1. / shapeMean_) * boost::math::gamma_p_inv(shapeMean_, ((double)i + 0.5) / (double)nbCategories_); // We use the median as category value
+      distShapeValues_[j] = meanShape_ * (1. / shapeShape_) * boost::math::gamma_p_inv(shapeShape_, ((double)j + 0.5) / (double)nbCategories_); // We use the median as category value
     }
-    for (size_t i = 0; i < nbShapeCategories_; ++i)
+    for (size_t j = 0; j < nbShapeCategories_; ++j)
     {
-      distShapeValues_[i] = meanShape_ * (1. / shapeShape_) * boost::math::gamma_p_inv(shapeShape_, ((double)i + 0.5) / (double)nbCategories_); // We use the median as category value
-    }
-    for (size_t k = 0; k < nbMeanCategories_; ++k)
-    {
-      for (size_t j = 0; j < nbShapeCategories_; ++j)
+      for (size_t k = 0; k < nbCategories_; ++k)
       {
-        for (size_t i = 0; i < nbCategories_; ++i)
-        {
-          distArray_[k * nbMeanCategories_ + j][i][0] = distMeanValues_[k] * (1. / distShapeValues_[j]) * boost::math::gamma_p_inv(distShapeValues_[j], ((double)i + 0.5) / (double)nbCategories_); // We use the median as category value
-          distArray_[k * nbMeanCategories_ + j][i][1] = 1. / static_cast<double>(nbCategories_);
-        }
+        distArray_[j][k][0] = (1. / distShapeValues_[j]) * boost::math::gamma_p_inv(distShapeValues_[j], ((double)k + 0.5) / (double)nbCategories_); // We use the median as category value
+        distArray_[j][k][1] = 1. / static_cast<double>(nbCategories_);
       }
     }
   }
@@ -120,7 +106,9 @@ public:
     for (size_t i  = 0; i < nbGenes_; ++i)
     {
       double c = static_cast<double>(count(counts_[i].begin(), counts_[i].end(), 0));
+      double s = accumulate(counts_[i].begin(), counts_[i].end(), 0.);
       rs_[i] = c / static_cast<double>(nbCells_);
+      means_[i] = s / (static_cast<double>(nbCells_) - c);
     }
     // Library scale is 1.
     for (size_t j  = 0; j < nbCells_; ++j)
@@ -137,14 +125,14 @@ public:
     out << "-----------------------------------------------------------------" << endl;
     out << " SGE model with " << nbGenes_ << " genes and " << nbCells_ << " cells." << endl;
     out << " Poisson distribution is modulated by a gamma distribution." << endl;
-    out << " Gamma param. are estimated via an empirical Bayesian approach." << endl;
+    out << " Noise param. are estimated via an empirical Bayesian approach." << endl;
     out << "-----------------------------------------------------------------" << endl;
   }
 
   /**
    * @brief Likelihood calculations
    */
-  double computeLogLikelihoodForGeneForClass(size_t i, double r, size_t meanClass, size_t shapeClass)
+  double computeLogLikelihoodForGeneForClass(size_t i, double r, double mean, size_t shapeClass)
   {
     double conditionalLogLikelihood = 0.;
     for (size_t j = 0; j < nbCells_; ++j)
@@ -153,7 +141,7 @@ public:
       d1_array_dbl s(nbCategories_);
       for (size_t k = 0; k < nbCategories_; ++k)
       {
-        s[k] = dpoisson(counts_[i][j], distArray_[meanClass * nbMeanCategories_ + shapeClass][k][0] * l) * distArray_[meanClass * nbMeanCategories_ + shapeClass][k][1];
+        s[k] = dpoisson(counts_[i][j], mean * l * distArray_[shapeClass][k][0]) * distArray_[shapeClass][k][1];
       }
       auto S = accumulate(s.begin(), s.end(), 0.);
       double P;
@@ -167,16 +155,7 @@ public:
       }
       if (isnan(log(P)) || isinf(log(P)))
       {
-        //cerr << i << "," << j << ", P=" << P << ", r=" << r << ", S=" << S << ", l = " << l << endl;
-        //VectorTools::print(s);
-	//cerr << "Hyper parameters: " << meanMean_ << "|" << shapeMean_ << "|" << meanShape_ << "|" << shapeShape_ << endl;
-        //cerr << i << "," << j << ", mean class = " << meanClass << ", shape class = " << shapeClass << endl;
-        //for (size_t k = 0; k < nbCategories_; ++k)
-        //{
-        //  cerr << i << ", " << j << ", " << k << ", count ij=" << counts_[i][j] << ", distMeanValue=" << distMeanValues_[k] << ", distShapeValue=" << distShapeValues_[k] << ", distArray0=" << distArray_[meanClass * nbMeanCategories_ + shapeClass][k][0] * l << ", distArray1=" <<  distArray_[meanClass * nbMeanCategories_ + shapeClass][k][1] << endl;
-        //}
-        //throw (Exception("Probability is 0!!!"));
-	P = numeric_limits<double>::min();
+        P = numeric_limits<double>::min();
       }
       conditionalLogLikelihood += log(P);
     }
@@ -187,16 +166,12 @@ public:
     return conditionalLogLikelihood;
   }
 
-  double computeLogLikelihoodForGene(size_t i, double r)
+  double computeLogLikelihoodForGene(size_t i, double r, double mean)
   {
-    d1_array_dbl logLikelihoods(nbMeanCategories_ * nbShapeCategories_);
-    size_t z = 0;
-    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
+    d1_array_dbl logLikelihoods(nbShapeCategories_);
+    for (size_t k = 0; k < nbShapeCategories_; ++k)
     {
-      for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
-      {
-        logLikelihoods[z++] = computeLogLikelihoodForGeneForClass(i, r, k1, k2) - log(static_cast<double>(nbMeanCategories_ * nbShapeCategories_));
-      }
+      logLikelihoods[k] = computeLogLikelihoodForGeneForClass(i, r, mean, k) - log(static_cast<double>(nbShapeCategories_));
     }
     double logLikelihood = logSumExp(logLikelihoods.begin(), logLikelihoods.end());
     if (isnan(logLikelihood) || isinf(logLikelihood))
@@ -207,25 +182,22 @@ public:
   }
 
   //an alternative version where genes have independent ditributions per gene
-  double computeLogLikelihoodForGene2(size_t i, double r)
+  double computeLogLikelihoodForGene2(size_t i, double r, double mean)
   {
     double logLikelihood = 0.;
     for (size_t j = 0; j < nbCells_; ++j)
     {
       double l = ls_[j];
-      d1_array_dbl s(nbMeanCategories_ * nbShapeCategories_ * nbCategories_);
+      d1_array_dbl s(nbShapeCategories_ * nbCategories_);
       size_t z = 0;
-      for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
+      for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
       {
-        for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
+        for (size_t k3 = 0; k3 < nbCategories_; ++k3)
         {
-          for (size_t k3 = 0; k3 < nbCategories_; ++k3)
-          {
-            s[z++] = dpoisson(counts_[i][j], distArray_[k1 * nbMeanCategories_ + k2][k3][0] * l) * distArray_[k1 * nbMeanCategories_ + k2][k3][1];
-          }
+          s[z++] = dpoisson(counts_[i][j], mean * l * distArray_[k2][k3][0]) * distArray_[k2][k3][1];
         }
       }
-      auto S = accumulate(s.begin(), s.end(), 0.) / static_cast<double>(nbMeanCategories_ * nbShapeCategories_);
+      auto S = accumulate(s.begin(), s.end(), 0.) / static_cast<double>(nbShapeCategories_);
       double P;
       if (counts_[i][j] == 0)
       {
@@ -249,19 +221,17 @@ public:
     double logLikelihood = 0.;
     for (size_t i = 0; i < nbGenes_; ++i)
     {
-      d1_array_dbl s(nbMeanCategories_ * nbShapeCategories_ * nbCategories_);
+      double mean = means_[i];
+      d1_array_dbl s(nbShapeCategories_ * nbCategories_);
       size_t z = 0;
-      for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
+      for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
       {
-        for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
+        for (size_t k3 = 0; k3 < nbCategories_; ++k3)
         {
-          for (size_t k3 = 0; k3 < nbCategories_; ++k3)
-          {
-            s[z++] = dpoisson(counts_[i][j], distArray_[k1 * nbMeanCategories_ + k2][k3][0] * l) * distArray_[k1 * nbMeanCategories_ + k2][k3][1];
-          }
+          s[z++] = dpoisson(counts_[i][j], mean * l * distArray_[k2][k3][0]) * distArray_[k2][k3][1];
         }
       }
-      auto S = accumulate(s.begin(), s.end(), 0.) / static_cast<double>(nbMeanCategories_ * nbShapeCategories_);
+      auto S = accumulate(s.begin(), s.end(), 0.) / static_cast<double>(nbShapeCategories_);
       double P;
       double r = rs_[i];
       if (counts_[i][j] == 0)
@@ -281,17 +251,15 @@ public:
     return logLikelihood;
   }
 
-  double computeLogLikelihood(double meanMean, double shapeMean, double meanShape, double shapeShape)
+  double computeLogLikelihood(double meanShape, double shapeShape)
   {
-    meanMean_ = meanMean;
-    shapeMean_ = shapeMean;
     meanShape_ = meanShape;
     shapeShape_ = shapeShape;
     computeCategories();
     d1_array_dbl logLik(nbGenes_);
 
     for_each (std::execution::par, geneIndex_.begin(), geneIndex_.end(), [&](size_t i) {
-      logLik[i] = computeLogLikelihoodForGene(i, rs_[i]);
+      logLik[i] = computeLogLikelihoodForGene(i, rs_[i], means_[i]);
     });
     sort(logLik.begin(), logLik.end()); // Sort by increasing value to limit underflow.
     double logLikelihood = accumulate(logLik.begin(), logLik.end(), 0.);
@@ -301,177 +269,38 @@ public:
 
   double getLogLikelihoodForGene(size_t i) const
   {
-    return const_cast<EmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForGene(i, rs_[i]); // Actually ok to do so here, since we are not modifying the object.
+    return const_cast<EmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForGene(i, rs_[i], means_[i]); // Actually ok to do so here, since we are not modifying the object.
   }
 
-  NumberResult<double> getMeanForGene(size_t i) const
+  double getMeanForGene(size_t i) const
   {
-    d1_array_dbl logMeanLikelihoods(nbMeanCategories_);
-    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
-    {
-      d1_array_dbl logShapeLikelihoods(nbShapeCategories_);
-      for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
-      {
-        logShapeLikelihoods[k2] = const_cast<EmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForGeneForClass(i, rs_[i], k1, k2) - log(static_cast<double>(nbMeanCategories_ * nbShapeCategories_));
-      }
-      logMeanLikelihoods[k1] = logSumExp(logShapeLikelihoods.begin(), logShapeLikelihoods.end());
-    }
-    double logLik = logSumExp(logMeanLikelihoods.begin(), logMeanLikelihoods.end());
-    double postMean = 0.;
-    double entropyMean = 0.;
-    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
-    {
-      double p = exp(logMeanLikelihoods[k1] - logLik);
-      if (p > 0) {
-        postMean += p * distMeanValues_[k1];
-        entropyMean -= p * log(p);
-      }
-    }
-    return NumberResult<double>(postMean, entropyMean);
+    return means_[i];
   }
 
   NumberResult<double> getNoiseForGene(size_t i) const
   {
     d1_array_dbl logShapeLikelihoods(nbShapeCategories_);
-    for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
+    for (size_t k = 0; k < nbShapeCategories_; ++k)
     {
-      d1_array_dbl logMeanLikelihoods(nbMeanCategories_);
-      for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
-      {
-        logMeanLikelihoods[k1] = const_cast<EmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForGeneForClass(i, rs_[i], k1, k2) - log(static_cast<double>(nbMeanCategories_ * nbShapeCategories_));
-      }
-      logShapeLikelihoods[k2] = logSumExp(logMeanLikelihoods.begin(), logMeanLikelihoods.end());
+      logShapeLikelihoods[k] = const_cast<EmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForGeneForClass(i, rs_[i], means_[i], k) - log(static_cast<double>(nbShapeCategories_));
     }
     double logLik = logSumExp(logShapeLikelihoods.begin(), logShapeLikelihoods.end());
     double postNoise = 0.;
     double entropyNoise = 0.;
-    for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
+    for (size_t k = 0; k < nbShapeCategories_; ++k)
     {
-      double p = exp(logShapeLikelihoods[k2] - logLik);
+      double p = exp(logShapeLikelihoods[k] - logLik);
       if (p > 0) {
-        postNoise += p * (1. / distShapeValues_[k2]);
+        postNoise += p * (1. / distShapeValues_[k]);
         entropyNoise -= p * log(p);
       }
     }
     return NumberResult<double>(postNoise, entropyNoise);
   }
 
-  double getMeanForGeneForCell(size_t i, size_t j) const
-  {
-    double l = ls_[j];
-    d1_array_dbl condLik(nbMeanCategories_);
-    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
-    {
-      d1_array_dbl s(nbCategories_ * nbShapeCategories_);
-      size_t z = 0;
-      for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
-      {
-        for (size_t k3 = 0; k3 < nbCategories_; ++k3)
-        {
-          s[z++] = dpoisson(counts_[i][j], distArray_[k1 * nbMeanCategories_ + k2][k3][0] * l) * distArray_[k1 * nbMeanCategories_ + k2][k3][1] ;
-        }
-      }
-      condLik[k1] = accumulate(s.begin(), s.end(), 0.) / static_cast<double>(nbMeanCategories_ + nbShapeCategories_);
-    }
-    double probSum = accumulate(condLik.begin(), condLik.end(), 0.);
-
-    double postMean = 0.;
-    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
-    {
-      postMean += distMeanValues_[k1] * condLik[k1] / probSum; 
-    }
-    return postMean;
-  }
-
-  double getMeanEntropyForGeneForCell(size_t i, size_t j) const
-  {
-    double l = ls_[j];
-    d1_array_dbl condLik(nbMeanCategories_);
-    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
-    {
-      d1_array_dbl s(nbCategories_ * nbShapeCategories_);
-      size_t z = 0;
-      for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
-      {
-        for (size_t k3 = 0; k3 < nbCategories_; ++k3)
-        {
-          s[z++] = dpoisson(counts_[i][j], distArray_[k1 * nbMeanCategories_ + k2][k3][0] * l) * distArray_[k1 * nbMeanCategories_ + k2][k3][1] ;
-        }
-      }
-      condLik[k1] = accumulate(s.begin(), s.end(), 0.) / static_cast<double>(nbMeanCategories_ + nbShapeCategories_);
-    }
-    double probSum = accumulate(condLik.begin(), condLik.end(), 0.);
-
-    double ent = 0.;
-    for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
-    {
-      double p = condLik[k1] / probSum; 
-      ent -= p * log(p); 
-    }
-    return ent;
-  }
-
-  double getNoiseForGeneForCell(size_t i, size_t j) const
-  {
-    double l = ls_[j];
-    d1_array_dbl condLik(nbShapeCategories_);
-    for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
-    {
-      d1_array_dbl s(nbCategories_ * nbMeanCategories_);
-      size_t z = 0;
-      for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
-      {
-        for (size_t k3 = 0; k3 < nbCategories_; ++k3)
-        {
-          s[z++] = dpoisson(counts_[i][j], distArray_[k1 * nbMeanCategories_ + k2][k3][0] * l) * distArray_[k1 * nbMeanCategories_ + k2][k3][1] ;
-        }
-      }
-      condLik[k2] = accumulate(s.begin(), s.end(), 0.) / static_cast<double>(nbMeanCategories_ + nbShapeCategories_);
-    }
-    double probSum = accumulate(condLik.begin(), condLik.end(), 0.);
-
-    double postNoise = 0.;
-    for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
-    {
-      postNoise += (1. / distShapeValues_[k2]) * condLik[k2] / probSum; 
-    }
-    return postNoise;
-  }
-
-  double getNoiseEntropyForGeneForCell(size_t i, size_t j) const
-  {
-    double l = ls_[j];
-    d1_array_dbl condLik(nbShapeCategories_);
-    for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
-    {
-      d1_array_dbl s(nbCategories_ * nbMeanCategories_);
-      size_t z = 0;
-      for (size_t k1 = 0; k1 < nbMeanCategories_; ++k1)
-      {
-        for (size_t k3 = 0; k3 < nbCategories_; ++k3)
-        {
-          s[z++] = dpoisson(counts_[i][j], distArray_[k1 * nbMeanCategories_ + k2][k3][0] * l) * distArray_[k1 * nbMeanCategories_ + k2][k3][1] ;
-        }
-      }
-      condLik[k2] = accumulate(s.begin(), s.end(), 0.) / static_cast<double>(nbMeanCategories_ + nbShapeCategories_);
-    }
-    double probSum = accumulate(condLik.begin(), condLik.end(), 0.);
-
-    double ent = 0.;
-    for (size_t k2 = 0; k2 < nbShapeCategories_; ++k2)
-    {
-      double p = condLik[k2] / probSum; 
-      ent -= p * log(p); 
-    }
-    return ent;
-  }
-
-
+ 
   void printHyperParameters(ostream& out) const
   {
-    out << "- Mean hyper parameters:" << endl;
-    out << "  * Mean: " << meanMean_ << endl;
-    out << "  * Shape: " << shapeMean_ << endl;
     out << "- Shape hyper parameters:" << endl;
     out << "  * Mean: " << meanShape_ << endl;
     out << "  * Shape: " << shapeShape_ << endl;
@@ -479,11 +308,11 @@ public:
 
   void printGeneParameters(ostream& out) const
   {
-    out << "Gene,r,logLk" << endl;
+    out << "Gene,r,mean,logLk" << endl;
 
     for (size_t i = 0; i < nbGenes_; ++i)
     {
-      out << geneIds_[i] << "," << rs_[i] << "," << getLogLikelihoodForGene(i) << endl;
+      out << geneIds_[i] << "," << rs_[i] << "," << means_[i] << "," << getLogLikelihoodForGene(i) << endl;
     }
   }
 
@@ -498,91 +327,16 @@ public:
 
   void printResultsForGenes(ostream& out) const
   {
-    out << "Gene,Mean,Noise,EntropyMean,EntropyNoise" << endl;
+    out << "Gene,Mean,Noise,EntropyNoise" << endl;
 
     for (size_t i = 0; i < nbGenes_; ++i)
     {
-      auto resMean = getMeanForGene(i);
+      double resMean = getMeanForGene(i);
       auto resNoise = getNoiseForGene(i);
-      out << geneIds_[i] << "," << resMean.value << "," << resNoise.value << "," << resMean.score << "," << resNoise.score << endl;
+      out << geneIds_[i] << "," << resMean << "," << resNoise.value << "," << resNoise.score << endl;
     }
   }
 
-  void printMeanResults(ostream& out) const
-  {
-    out << "Gene";
-    for (size_t j = 0; j < nbCells_; ++j)
-    {
-      out << "," << cellIds_[j];
-    }
-    out << endl;
-    for (size_t i = 0; i < nbGenes_; ++i)
-    {
-      out << geneIds_[i];
-      for (size_t j = 0; j < nbCells_; ++j)
-      {
-        out << "," << getMeanForGeneForCell(i, j);
-      }
-      out << endl;
-    }
-  }
-
-  void printNoiseResults(ostream& out) const
-  {
-    out << "Gene";
-    for (size_t j = 0; j < nbCells_; ++j)
-    {
-      out << "," << cellIds_[j];
-    }
-    out << endl;
-    for (size_t i = 0; i < nbGenes_; ++i)
-    {
-      out << geneIds_[i];
-      for (size_t j = 0; j < nbCells_; ++j)
-      {
-        out << "," << getNoiseForGeneForCell(i, j);
-      }
-      out << endl;
-    }
-  }
-
-  void printMeanEntropyResults(ostream& out) const
-  {
-    out << "Gene";
-    for (size_t j = 0; j < nbCells_; ++j)
-    {
-      out << "," << cellIds_[j];
-    }
-    out << endl;
-    for (size_t i = 0; i < nbGenes_; ++i)
-    {
-      out << geneIds_[i];
-      for (size_t j = 0; j < nbCells_; ++j)
-      {
-        out << "," << getMeanEntropyForGeneForCell(i, j);
-      }
-      out << endl;
-    }
-  }
-
-  void printNoiseEntropyResults(ostream& out) const
-  {
-    out << "Gene";
-    for (size_t j = 0; j < nbCells_; ++j)
-    {
-      out << "," << cellIds_[j];
-    }
-    out << endl;
-    for (size_t i = 0; i < nbGenes_; ++i)
-    {
-      out << geneIds_[i];
-      for (size_t j = 0; j < nbCells_; ++j)
-      {
-        out << "," << getNoiseEntropyForGeneForCell(i, j);
-      }
-      out << endl;
-    }
-  }
 
 public:
   class EBLikelihood :
@@ -591,8 +345,6 @@ public:
   {
 private:
     shared_ptr<EmpiricalBayesianSgeModel> sgeModel_;
-    double meanMean_;
-    double shapeMean_;
     double meanShape_;
     double shapeShape_;
 
@@ -600,13 +352,9 @@ public:
     EBLikelihood(shared_ptr<EmpiricalBayesianSgeModel> sgeModel) :
       AbstractParametrizable(""),
       sgeModel_(sgeModel),
-      meanMean_(0),
-      shapeMean_(0),
       meanShape_(0),
       shapeShape_(0)
     {
-      addParameter_(new Parameter("meanMean", sgeModel->meanMean_, make_shared<IntervalConstraint>(0.01, 999, true, true)));
-      addParameter_(new Parameter("shapeMean", sgeModel->shapeMean_, make_shared<IntervalConstraint>(0.01, 999, true, true)));
       addParameter_(new Parameter("meanShape", sgeModel->meanShape_, make_shared<IntervalConstraint>(0.01, 999, true, true)));
       addParameter_(new Parameter("shapeShape", sgeModel->shapeShape_, make_shared<IntervalConstraint>(0.01, 999, true, true)));
     }
@@ -617,15 +365,13 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      meanMean_ = getParameter("meanMean").getValue();
-      shapeMean_ = getParameter("shapeMean").getValue();
       meanShape_ = getParameter("meanShape").getValue();
       shapeShape_ = getParameter("shapeShape").getValue();
     }
 
     double getValue() const override
     {
-      return -sgeModel_->computeLogLikelihood(meanMean_, shapeMean_, meanShape_, shapeShape_);
+      return -sgeModel_->computeLogLikelihood(meanShape_, shapeShape_);
     }
   };
 
@@ -637,15 +383,18 @@ private:
     shared_ptr<EmpiricalBayesianSgeModel> sgeModel_;
     size_t geneId_;
     double r_;
+    double mean_;
 
 public:
     GeneLikelihood(shared_ptr<EmpiricalBayesianSgeModel> sgeModel, size_t geneId) :
       AbstractParametrizable(""),
       sgeModel_(sgeModel),
       geneId_(geneId),
-      r_(0)
+      r_(0),
+      mean_(1.)
     {
       addParameter_(new Parameter("r", sgeModel->rs_[geneId], Parameter::PROP_CONSTRAINT_EX));
+      addParameter_(new Parameter("mean", sgeModel->rs_[geneId], Parameter::R_PLUS_STAR));
     }
 
     GeneLikelihood* clone() const override { return new GeneLikelihood(*this); }
@@ -655,11 +404,12 @@ public:
     {
       matchParametersValues(parameters);
       r_ = getParameter("r").getValue();
+      mean_ = getParameter("mean").getValue();
     }
 
     double getValue() const override
     {
-      return -sgeModel_->computeLogLikelihoodForGene(geneId_, r_);
+      return -sgeModel_->computeLogLikelihoodForGene(geneId_, r_, mean_);
     }
   };
 
