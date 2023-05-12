@@ -6,49 +6,34 @@
  * =====================================================================================
  */
 
-#include "ProbFunctions.h"
+#include "SgeModel.h"
 
-class FreeParameterSgeModel
+class FreeParameterSgeModel:
+  public SgeModel
 {
 public:
-  d2_array_ui counts_;
-  d1_array_str geneIds_;
-  d1_array_str cellIds_;
-  size_t nbGenes_;
-  size_t nbCells_;
   string model_;
-  size_t nbCategories_;
 
   // Distribution parameters
   size_t nbDistParams_;
   vector<string> distParamNames_;
   vector<shared_ptr<Constraint> > distParamConstraints_;
   d2_array_dbl distParamValues_;
-
-  d1_array_dbl rs_;           // Dropout parameters
-  d1_array_dbl ls_;           // Library size parameters
   d3_array_dbl distArray_;    // Intermediate calculations. Contains, for each gene, each category, two numbers: value and probability.
 
 public:
   FreeParameterSgeModel(
-    const d2_array_ui& counts,
-    const d1_array_str& geneIds,
-    const d1_array_str& cellIds,
-    const string& model,
-    size_t nbCategories) :
-    counts_(counts),
-    geneIds_(geneIds),
-    cellIds_(cellIds),
-    nbGenes_(counts.size()),
-    nbCells_(nbGenes_ == 0 ? 0 : counts[0].size()),
+      const d2_array_ui& counts,
+      const d1_array_str& geneIds,
+      const d1_array_str& cellIds,
+      const string& model,
+      size_t nbCategories) :
+    SgeModel(counts, geneIds, cellIds, nbCategories),
     model_(model),
-    nbCategories_(nbCategories),
     nbDistParams_(0),  // Will be initialized in the constructor body
     distParamNames_(), // Will be initialized in the constructor body
     distParamConstraints_(), // Will be initialized in the constructor body
     distParamValues_(nbGenes_),
-    rs_(nbGenes_),
-    ls_(nbCells_),
     distArray_(nbGenes_)
   {
     if (model == "ScaledBeta")

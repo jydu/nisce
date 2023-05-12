@@ -10,23 +10,18 @@
 #define _FULL_EMPIRICAL_BAYESIAN_SGE_MODEL_H_
 
 
-#include "ProbFunctions.h"
+#include "SgeModel.h"
 
 #include <limits>
 
 // Only supports Gamma model. We assume all counts to share independent Gammas, but we could inforce a single one (like ASRV vs SSRV phylogenetic models).
 // Both mean and noise have a priori distributions.
-class FullEmpiricalBayesianSgeModel
+class FullEmpiricalBayesianSgeModel:
+  public SgeModel
 {
 public:
-  d2_array_ui counts_;
-  d1_array_str geneIds_;
-  d1_array_str cellIds_;
-  size_t nbGenes_;
-  size_t nbCells_;
   size_t nbMeanCategories_;
   size_t nbShapeCategories_;
-  size_t nbCategories_;
 
   // Distribution parameters
   double meanMean_;
@@ -37,36 +32,27 @@ public:
   d1_array_dbl distMeanValues_;
   d1_array_dbl distShapeValues_;
 
-  d1_array_dbl rs_;           // Dropout parameters
-  d1_array_dbl ls_;           // Library size parameters
   d3_array_dbl distArray_;    // Intermediate calculations. Contains, for each param category, each lambda category, two numbers: value and probability.
 
   vector<size_t> geneIndex_;
 
 public:
   FullEmpiricalBayesianSgeModel(
-    const d2_array_ui& counts,
-    const d1_array_str& geneIds,
-    const d1_array_str& cellIds,
-    size_t nbMeanCategories,
-    size_t nbShapeCategories,
-    size_t nbCategories) :
-    counts_(counts),
-    geneIds_(geneIds),
-    cellIds_(cellIds),
-    nbGenes_(counts.size()),
-    nbCells_(nbGenes_ == 0 ? 0 : counts[0].size()),
+      const d2_array_ui& counts,
+      const d1_array_str& geneIds,
+      const d1_array_str& cellIds,
+      size_t nbMeanCategories,
+      size_t nbShapeCategories,
+      size_t nbCategories) :
+    SgeModel(counts, geneIds, cellIds, nbCategories),
     nbMeanCategories_(nbMeanCategories),
     nbShapeCategories_(nbShapeCategories),
-    nbCategories_(nbCategories),
     meanMean_(1.),
     shapeMean_(1.),
     meanShape_(1.),
     shapeShape_(1.),
     distMeanValues_(nbMeanCategories),
     distShapeValues_(nbShapeCategories),
-    rs_(nbGenes_),
-    ls_(nbCells_),
     distArray_(nbMeanCategories * nbShapeCategories),
     geneIndex_()
   {
