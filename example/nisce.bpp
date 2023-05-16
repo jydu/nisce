@@ -6,6 +6,7 @@ input.file.column_separator = ,
 min_nb_cells_with_obs = 10
 
 //Model:
+cell_partition.file = None
 method = 
 //Number of discrete categories to modulate the Poisson process:
 nb_categories = 10
@@ -20,19 +21,24 @@ tolerance2 = 0.0001
 tolerance3 = 0.000001
 
 //Output:
-output.parameters.genes1.file = $(PREFIX)_gene1_pamameters.csv
-output.parameters.genes2.file = $(PREFIX)_gene2_pamameters.csv
-output.parameters.cells1.file = $(PREFIX)_cell1_pamameters.csv
+output.parameters.genes1.file = $(PREFIX)_gene1_pamameters.csv //Coarse
+output.parameters.genes2.file = $(PREFIX)_gene2_pamameters.csv //Intermediate
+output.parameters.genes3.file = $(PREFIX)_gene3_pamameters.csv //Final
+output.parameters.cells2.file = $(PREFIX)_cell2_pamameters.csv //Intermediate
+output.parameters.cells3.file = $(PREFIX)_cell3_pamameters.csv //Final
 output.results.genes.file = $(PREFIX)_gene_results.csv
 
 //FP method:
 gene_distribution = Gamma //ScaledBeta
 
 //EB method:
-nb_shape_categories = 3s0
+nb_shape_categories = 30
 
 //FEB method:
 nb_mean_categories = 10
 output.results.mean.file = $(PREFIX)_mean_results.csv
 output.results.noise.file = $(PREFIX)_noise_results.csv
+
+//Cell partitions:
+cell_partition.result.file = $(PREFIX)_partition_results.csv
 

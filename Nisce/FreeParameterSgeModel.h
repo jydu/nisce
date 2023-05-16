@@ -6,6 +6,9 @@
  * =====================================================================================
  */
 
+#ifndef _FREE_PARAMETER_SGE_MODEL_H_
+#define _FREE_PARAMETER_SGE_MODEL_H_
+
 #include "SgeModel.h"
 
 class FreeParameterSgeModel:
@@ -198,7 +201,7 @@ public:
       d1_array_dbl s(nbCategories_);
       for (size_t k = 0; k < nbCategories_; ++k)
       {
-        s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] / l) * distArray_[i][k][1];
+        s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] * l) * distArray_[i][k][1];
       }
       auto S = accumulate(s.begin(), s.end(), 0.);
       double P;
@@ -247,9 +250,19 @@ public:
     return logLikelihood;
   }
 
-  double getLogLikelihoodForGene(size_t i) const
+  double getLogLikelihoodForGene(size_t i) const override
   {
     return const_cast<FreeParameterSgeModel*>(this)->computeLogLikelihoodForGene(i, rs_[i], distParamValues_[i]); // Actually ok to do so here, since we are not modifying the object.
+  }
+
+  double getLogLikelihoodForCell(size_t j) const override
+  {
+    return const_cast<FreeParameterSgeModel*>(this)->computeLogLikelihoodForCell(j, ls_[j]); // Actually ok to do so here, since we are not modifying the object.
+  }
+
+  unsigned int getNumberOfParameters() const override
+  {
+    return static_cast<unsigned int>(nbCells_ + nbGenes_ * (nbDistParams_ + 1));
   }
 
   double getAicForGene(size_t i) const
@@ -429,4 +442,5 @@ public:
   };
 };
 
+#endif // _FREE_PARAMETER_SGE_MODEL_H_
 

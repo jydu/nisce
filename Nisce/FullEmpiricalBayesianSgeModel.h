@@ -34,8 +34,6 @@ public:
 
   d3_array_dbl distArray_;    // Intermediate calculations. Contains, for each param category, each lambda category, two numbers: value and probability.
 
-  vector<size_t> geneIndex_;
-
 public:
   FullEmpiricalBayesianSgeModel(
       const d2_array_ui& counts,
@@ -53,8 +51,7 @@ public:
     shapeShape_(1.),
     distMeanValues_(nbMeanCategories),
     distShapeValues_(nbShapeCategories),
-    distArray_(nbMeanCategories * nbShapeCategories),
-    geneIndex_()
+    distArray_(nbMeanCategories * nbShapeCategories)
   {
     for (auto& a : distArray_)
     {
@@ -63,11 +60,6 @@ public:
       {
         b.resize(2);
       }
-    }
-    
-    for (size_t i = 0; i < nbGenes_; ++i)
-    {
-      geneIndex_.push_back(i);
     }
   }
 
@@ -286,9 +278,19 @@ public:
     return logLikelihood;
   }
 
-  double getLogLikelihoodForGene(size_t i) const
+  unsigned int getNumberOfParameters() const override
+  {
+    return static_cast<unsigned int>(nbCells_ + nbGenes_ + 4); //1 l per cell, 1 r per gene, 4 hyper parameters.
+  }
+
+  double getLogLikelihoodForGene(size_t i) const override
   {
     return const_cast<FullEmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForGene(i, rs_[i]); // Actually ok to do so here, since we are not modifying the object.
+  }
+
+  double getLogLikelihoodForCell(size_t j) const override
+  {
+    return const_cast<FullEmpiricalBayesianSgeModel*>(this)->computeLogLikelihoodForCell(j, ls_[j]); // Actually ok to do so here, since we are not modifying the object.
   }
 
   NumberResult<double> getMeanForGene(size_t i) const
