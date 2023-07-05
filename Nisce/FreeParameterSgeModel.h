@@ -107,10 +107,13 @@ public:
     // First distribution parameter is the mean
     for (size_t i  = 0; i < nbGenes_; ++i)
     {
-      double c = static_cast<double>(count(counts_[i].begin(), counts_[i].end(), 0));
+      size_t c = static_cast<size_t>(count(counts_[i].begin(), counts_[i].end(), 0));
+      //Pseudo counts to avoid r == 0 or r == 1
+      if (c == 0) c = 1;
+      if (c == nbCells_) c = nbCells_ - 1;
       double s = accumulate(counts_[i].begin(), counts_[i].end(), 0.);
-      rs_[i] = c / static_cast<double>(nbCells_);
-      distParamValues_[i][0] = s / (static_cast<double>(nbCells_) - c);
+      rs_[i] = static_cast<double>(c) / static_cast<double>(nbCells_);
+      distParamValues_[i][0] = s / static_cast<double>(nbCells_ - c);
       for (size_t j = 1; j < nbDistParams_; ++j)
       {
         distParamValues_[i][j] = 1.;
