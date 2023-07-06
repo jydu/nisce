@@ -83,10 +83,13 @@ public:
     // Dropout probability is proportion of 0s
     for (size_t i  = 0; i < nbGenes_; ++i)
     {
-      double c = static_cast<double>(count(counts_[i].begin(), counts_[i].end(), 0));
+      size_t c = static_cast<size_t>(count(counts_[i].begin(), counts_[i].end(), 0));
+      //Pseudo counts to avoid r == 0 or r == 1
+      if (c == 0) c = 1;
+      if (c == nbCells_) c = nbCells_ - 1;
       double s = accumulate(counts_[i].begin(), counts_[i].end(), 0.);
-      rs_[i] = c / static_cast<double>(nbCells_);
-      means_[i] = s / (static_cast<double>(nbCells_) - c);
+      rs_[i] = static_cast<double>(c) / static_cast<double>(nbCells_);
+      means_[i] = s / static_cast<double>(nbCells_ - c);
     }
     // Library scale is 1.
     for (size_t j  = 0; j < nbCells_; ++j)
