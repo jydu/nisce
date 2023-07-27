@@ -40,6 +40,7 @@
 
 // From bpp-core:
 #include <Bpp/Numeric/Function/Functions.h>
+#include <Bpp/Numeric/Function/ThreePointsNumericalDerivative.h>
 #include <Bpp/Numeric/Function/ReparametrizationFunctionWrapper.h>
 #include <Bpp/Numeric/Function/PowellMultiDimensions.h>
 #include <Bpp/Numeric/Function/BrentOneDimension.h>
@@ -53,6 +54,7 @@ using namespace bpp;
 
 #include "ProbFunctions.h"
 #include "FreeParameterSgeModel.h"
+#include "LessFreeParameterSgeModel.h"
 #include "EmpiricalBayesianSgeModel.h"
 #include "FullEmpiricalBayesianSgeModel.h"
 #include "CellPartitionFreeParameterSgeModel.h"
@@ -102,18 +104,18 @@ d2_array_ui readCounts(istream& input, d1_array_str& geneIds, d1_array_str& cell
 
 void help()
 {
-  cout << "This is NISCE 0.01." << endl;
+  cout << "This is NISCE 0.0.2." << endl;
   cout << "Usage:" << endl;
-  cout << "  nisce expression_file.csv" << endl;
+  cout << "  nisce param=options.bpp" << endl;
 }
 
 
 int main(int argc, char* argv[])
 {
   cout << "******************************************************************" << endl;
-  cout << "*                  N.I.S.C.E., version 0.0.1                     *" << endl;
+  cout << "*                  N.I.S.C.E., version 0.0.2                     *" << endl;
   cout << "* Author: J. Dutheil                        Created on  24/04/23 *" << endl;
-  cout << "*                                           Last Modif. 24/04/23 *" << endl;
+  cout << "*                                           Last Modif. 26/07/23 *" << endl;
   cout << "******************************************************************" << endl;
   cout << endl;
 
@@ -302,7 +304,7 @@ int main(int argc, char* argv[])
           ApplicationTools::displayGauge(progress, sgeModel->cellIndex_.size() - 1, '=');
         });
         ApplicationTools::displayTaskDone();
-  ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
 
         string outputCells2 = ApplicationTools::getAFilePath("output.parameters.cells2.file", nisce.getParams(), false, false);
         if (outputCells2 != "none")
@@ -316,10 +318,10 @@ int main(int argc, char* argv[])
         cout << endl;
         progress = 0;
         for_each (std::execution::par,
-      sgeModel->geneIndex_.begin(),
-      sgeModel->geneIndex_.end(),
-      [&](size_t i)
-  {
+                  sgeModel->geneIndex_.begin(),
+                  sgeModel->geneIndex_.end(),
+                  [&](size_t i)
+        {
           auto f = make_shared<FreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
           auto optimizer = make_unique<PowellMultiDimensions>(f);
           optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
@@ -339,7 +341,7 @@ int main(int argc, char* argv[])
           ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
         });
         ApplicationTools::displayTaskDone();
-  ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
 
         string outputGenes2 = ApplicationTools::getAFilePath("output.parameters.genes2.file", nisce.getParams(), false, false);
         if (outputGenes2 != "none")
@@ -357,10 +359,10 @@ int main(int argc, char* argv[])
         cout << endl;
         progress = 0;
         for_each (std::execution::par,
-      sgeModel->cellIndex_.begin(),
-      sgeModel->cellIndex_.end(),
-      [&](size_t j) 
-  {
+                  sgeModel->cellIndex_.begin(),
+                  sgeModel->cellIndex_.end(),
+                  [&](size_t j) 
+        {
           auto f = make_shared<FreeParameterSgeModel::CellLikelihood>(sgeModel, j);
           auto optimizer = make_unique<BrentOneDimension>(f);
           optimizer->setMessageHandler(messenger);
@@ -376,7 +378,7 @@ int main(int argc, char* argv[])
           ApplicationTools::displayGauge(progress, sgeModel->cellIndex_.size() - 1, '=');
         });
         ApplicationTools::displayTaskDone();
-  ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
 
         string outputCells3 = ApplicationTools::getAFilePath("output.parameters.cells3.file", nisce.getParams(), false, false);
         if (outputCells3 != "none")
@@ -390,10 +392,10 @@ int main(int argc, char* argv[])
         cout << endl;
         progress = 0;
         for_each (std::execution::par,
-            sgeModel->geneIndex_.begin(),
-      sgeModel->geneIndex_.end(),
-      [&](size_t i)
-  {
+                  sgeModel->geneIndex_.begin(),
+                  sgeModel->geneIndex_.end(),
+                  [&](size_t i)
+        {
           auto f = make_shared<FreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
           auto optimizer = make_unique<PowellMultiDimensions>(f);
           optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
@@ -413,7 +415,311 @@ int main(int argc, char* argv[])
           ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
         });
         ApplicationTools::displayTaskDone();
-  ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+
+        string outputGenes3 = ApplicationTools::getAFilePath("output.parameters.genes3.file", nisce.getParams(), false, false);
+        if (outputGenes3 != "none")
+        {
+          ofstream streamGenes3(outputGenes3, ios::out);
+          sgeModel->printGeneParameters(streamGenes3);
+          streamGenes3.close();
+        }
+
+        // Final results:
+        string outputGeneResults = ApplicationTools::getAFilePath("output.results.genes.file", nisce.getParams(), false, false);
+        if (outputGeneResults != "none")
+        {
+          ofstream streamGeneResults(outputGeneResults, ios::out);
+          sgeModel->printResultsForGenes(streamGeneResults);
+          streamGeneResults.close();
+        }
+
+        // Compute Confidence intervals:
+        string outputGeneCIResults = ApplicationTools::getAFilePath("output.results.genes_hessian.file", nisce.getParams(), false, false);
+        if (outputGeneCIResults != "none")
+        {
+          ofstream streamGeneCIResults(outputGeneCIResults, ios::out);
+          d1_array_str params;
+          params.push_back("r");
+          for (auto p : sgeModel->distParamNames_)
+          {
+            params.push_back(p);
+          }
+          streamGeneCIResults << "Gene";
+          for (auto p : params)
+          {
+            streamGeneCIResults << "," << p;
+          }
+          streamGeneCIResults << endl;
+
+          ApplicationTools::displayTask("Computing CI of gene distribution parameters");
+          cout << endl;
+          progress = 0;
+          d2_array_dbl hessianValues(sgeModel->nbGenes_);
+          for_each (std::execution::par,
+                    sgeModel->geneIndex_.begin(),
+                    sgeModel->geneIndex_.end(),
+                    [&](size_t i)
+          {
+            auto f = make_shared<FreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
+            auto numDer = make_shared<ThreePointsNumericalDerivative>(f);
+            numDer->enableSecondOrderDerivatives(true);
+            numDer->enableSecondOrderCrossDerivatives(false);
+            numDer->setParametersToDerivate(params);
+            numDer->setParameters(numDer->getParameters()); //Induce calculation of derivatives.
+            hessianValues[i].resize(params.size());
+            for (size_t k = 0; k < params.size(); ++k)
+            {
+              hessianValues[i][k] = - numDer->getSecondOrderDerivative(params[k]); //We use - here as the function is -logLik
+            }
+            progress++;
+            ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
+          });
+          ApplicationTools::displayTaskDone();
+          for (size_t i = 0; i < sgeModel->nbGenes_; ++i)
+          {
+            streamGeneCIResults << sgeModel->geneIds_[i];
+            for (auto v : hessianValues[i])
+            {
+              streamGeneCIResults << "," << v;
+            }
+            streamGeneCIResults << endl; 
+          }
+          streamGeneCIResults.close();
+        }
+
+      }
+      else if (method == "LFP" || method == "LessFreeParameters")
+      {
+        /***********************************************************
+        *                                                         *
+        * Simple model with free parameters. Gamma or ScaledBeta. *
+        * Drop-out parameter has a prior distribution.            *
+        *                                                         *
+        ***********************************************************/
+
+        // Initialize parameters:
+        string model = ApplicationTools::getStringParameter("gene_distribution", nisce.getParams(), "ScaledBeta");
+        size_t nbCategories = ApplicationTools::getParameter<size_t>("nb_categories", nisce.getParams(), 10);
+        size_t nbRCategories = ApplicationTools::getParameter<size_t>("nb_dropout_categories", nisce.getParams(), 10);
+
+        // Create the data structure:
+        auto sgeModel = make_shared<LessFreeParameterSgeModel>(counts, geneIds, cellIds, model, nbCategories, nbRCategories);
+        sgeModel->print(cout);
+        sgeModel->initParameters();
+
+        // Now optimize parameters.
+        double tol1 = ApplicationTools::getDoubleParameter("tolerance1", nisce.getParams(), 0.01);
+
+        ApplicationTools::displayTask("Coarse fitting of gene distributions");
+        cout << endl;
+        unsigned int progress = 0;
+        for_each (std::execution::par,
+                  sgeModel->geneIndex_.begin(),
+                  sgeModel->geneIndex_.end(),
+                  [&](size_t i)
+        {
+          auto f = make_shared<LessFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
+          auto optimizer = make_unique<PowellMultiDimensions>(f);
+          optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
+          optimizer->setMessageHandler(messenger);
+          optimizer->setProfiler(profiler);
+          optimizer->setVerbose(0);
+          optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+          optimizer->init(f->getParameters());
+          optimizer->getStopCondition()->setTolerance(tol1);
+          optimizer->optimize();
+          for (size_t k = 0; k < sgeModel->nbDistParams_; ++k)
+          {
+            sgeModel->distParamValues_[i][k] = optimizer->getParameterValue(sgeModel->distParamNames_[k]);
+          }
+          progress++;
+          ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
+        });
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+
+        string outputGenes1 = ApplicationTools::getAFilePath("output.parameters.genes1.file", nisce.getParams(), false, false);
+        if (outputGenes1 != "none")
+        {
+          ofstream streamGenes1(outputGenes1, ios::out);
+          sgeModel->printGeneParameters(streamGenes1);
+          streamGenes1.close();
+        }
+
+        // Hyper parameters:
+   
+        ApplicationTools::displayTask("Coarse fitting of hyper-parameters");
+        cout << endl;
+        auto feb = make_shared<LessFreeParameterSgeModel::FullLikelihood>(sgeModel);
+        auto hyperOptimizer = make_unique<PowellMultiDimensions>(feb);
+        hyperOptimizer->setStopCondition(make_shared<FunctionStopCondition>(hyperOptimizer.get()));
+        hyperOptimizer->setMessageHandler(messenger);
+        hyperOptimizer->setProfiler(profiler);
+        hyperOptimizer->setVerbose(0);
+        hyperOptimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+        hyperOptimizer->init(feb->getParameters());
+        hyperOptimizer->getStopCondition()->setTolerance(tol1);
+        hyperOptimizer->optimize();
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        sgeModel->printHyperParameters(cout);  
+
+        // Then cell specific parameters:
+
+        double tol2 = ApplicationTools::getDoubleParameter("tolerance2", nisce.getParams(), 0.0001);
+
+        ApplicationTools::displayTask("Fitting of cell-specific parameters");
+        cout << endl;
+        progress = 0;
+        for_each (std::execution::par,
+                  sgeModel->cellIndex_.begin(),
+                  sgeModel->cellIndex_.end(),
+                  [&](size_t j)
+        {
+          auto f = make_shared<LessFreeParameterSgeModel::CellLikelihood>(sgeModel, j);
+          auto optimizer = make_unique<BrentOneDimension>(f);
+          optimizer->setMessageHandler(messenger);
+          optimizer->setProfiler(profiler);
+          optimizer->setVerbose(0);
+          optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+          optimizer->setInitialInterval(0.001, 100);
+          optimizer->init(f->getParameters());
+          optimizer->getStopCondition()->setTolerance(tol2);
+          optimizer->optimize();
+          sgeModel->ls_[j] = optimizer->getParameterValue("l");
+          progress++;
+          ApplicationTools::displayGauge(progress, sgeModel->cellIndex_.size() - 1, '=');
+        });
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+
+        string outputCells2 = ApplicationTools::getAFilePath("output.parameters.cells2.file", nisce.getParams(), false, false);
+        if (outputCells2 != "none")
+        {
+          ofstream streamCells2(outputCells2, ios::out);
+          sgeModel->printCellParameters(streamCells2);
+          streamCells2.close();
+        }
+
+        ApplicationTools::displayTask("Re-fitting of hyper-parameters");
+        cout << endl;
+        hyperOptimizer->init(feb->getParameters());
+        hyperOptimizer->getStopCondition()->setTolerance(tol2);
+        hyperOptimizer->optimize();
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        sgeModel->printHyperParameters(cout);  
+
+        ApplicationTools::displayTask("Re-fitting of gene distributions");
+        cout << endl;
+        progress = 0;
+        for_each (std::execution::par,
+                  sgeModel->geneIndex_.begin(),
+                  sgeModel->geneIndex_.end(),
+                  [&](size_t i)
+        {
+          auto f = make_shared<LessFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
+          auto optimizer = make_unique<PowellMultiDimensions>(f);
+          optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
+          optimizer->setMessageHandler(messenger);
+          optimizer->setProfiler(profiler);
+          optimizer->setVerbose(0);
+          optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+          optimizer->init(f->getParameters());
+          optimizer->getStopCondition()->setTolerance(tol2);
+          optimizer->optimize();
+          for (size_t k = 0; k < sgeModel->nbDistParams_; ++k)
+          {
+            sgeModel->distParamValues_[i][k] = optimizer->getParameterValue(sgeModel->distParamNames_[k]);
+          }
+          progress++;
+          ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
+        });
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+
+        string outputGenes2 = ApplicationTools::getAFilePath("output.parameters.genes2.file", nisce.getParams(), false, false);
+        if (outputGenes2 != "none")
+        {
+          ofstream streamGenes2(outputGenes2, ios::out);
+          sgeModel->printGeneParameters(streamGenes2);
+          streamGenes2.close();
+        }
+
+        // Fine fitting
+        
+        double tol3 = ApplicationTools::getDoubleParameter("tolerance3", nisce.getParams(), 0.000001);
+
+        ApplicationTools::displayTask("Fine-fitting of cell-specific parameters");
+        cout << endl;
+        progress = 0;
+        for_each (std::execution::par,
+                  sgeModel->cellIndex_.begin(),
+                  sgeModel->cellIndex_.end(),
+                  [&](size_t j) 
+        {
+          auto f = make_shared<LessFreeParameterSgeModel::CellLikelihood>(sgeModel, j);
+          auto optimizer = make_unique<BrentOneDimension>(f);
+          optimizer->setMessageHandler(messenger);
+          optimizer->setProfiler(profiler);
+          optimizer->setVerbose(0);
+          optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+          optimizer->setInitialInterval(0.001, 100);
+          optimizer->init(f->getParameters());
+          optimizer->getStopCondition()->setTolerance(tol3);
+          optimizer->optimize();
+          sgeModel->ls_[j] = optimizer->getParameterValue("l");
+          progress++;
+          ApplicationTools::displayGauge(progress, sgeModel->cellIndex_.size() - 1, '=');
+        });
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+
+        string outputCells3 = ApplicationTools::getAFilePath("output.parameters.cells3.file", nisce.getParams(), false, false);
+        if (outputCells3 != "none")
+        {
+          ofstream streamCells3(outputCells3, ios::out);
+          sgeModel->printCellParameters(streamCells3);
+          streamCells3.close();
+        }
+
+        ApplicationTools::displayTask("Fine-fitting of hyper-parameters");
+        cout << endl;
+        hyperOptimizer->init(feb->getParameters());
+        hyperOptimizer->getStopCondition()->setTolerance(tol3);
+        hyperOptimizer->optimize();
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        sgeModel->printHyperParameters(cout);  
+
+        ApplicationTools::displayTask("Fine-fitting of gene distributions");
+        cout << endl;
+        progress = 0;
+        for_each (std::execution::par,
+                  sgeModel->geneIndex_.begin(),
+                  sgeModel->geneIndex_.end(),
+                  [&](size_t i)
+        {
+          auto f = make_shared<LessFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
+          auto optimizer = make_unique<PowellMultiDimensions>(f);
+          optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
+          optimizer->setMessageHandler(messenger);
+          optimizer->setProfiler(profiler);
+          optimizer->setVerbose(0);
+          optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+          optimizer->init(f->getParameters());
+          optimizer->getStopCondition()->setTolerance(tol2);
+          optimizer->optimize();
+          for (size_t k = 0; k < sgeModel->nbDistParams_; ++k)
+          {
+            sgeModel->distParamValues_[i][k] = optimizer->getParameterValue(sgeModel->distParamNames_[k]);
+          }
+          progress++;
+          ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
+        });
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
 
         string outputGenes3 = ApplicationTools::getAFilePath("output.parameters.genes3.file", nisce.getParams(), false, false);
         if (outputGenes3 != "none")
@@ -433,6 +739,7 @@ int main(int argc, char* argv[])
         }
 
       }
+
       else if (method == "FEB" || method == "FullEmpiricalBayesian")
       {
         //TODO redo optimization as for the FP model (1,2,3)
@@ -484,9 +791,9 @@ int main(int argc, char* argv[])
         unsigned int progress = 0;
         for_each (std::execution::par,
             sgeModel->cellIndex_.begin(),
-      sgeModel->cellIndex_.end(),
-      [&](size_t j)
-  {
+            sgeModel->cellIndex_.end(),
+            [&](size_t j)
+       {
           auto f = make_shared<FullEmpiricalBayesianSgeModel::CellLikelihood>(sgeModel, j);
           auto optimizer = make_unique<BrentOneDimension>(f);
           optimizer->setMessageHandler(messenger);
@@ -516,10 +823,10 @@ int main(int argc, char* argv[])
         cout << endl;
         progress = 0;
         for_each (std::execution::par,
-      sgeModel->geneIndex_.begin(),
-      sgeModel->geneIndex_.end(),
-      [&](size_t i)
-  {
+                  sgeModel->geneIndex_.begin(),
+                  sgeModel->geneIndex_.end(),
+                  [&](size_t i)
+        {
           auto f = make_shared<FullEmpiricalBayesianSgeModel::GeneLikelihood>(sgeModel, i);
           auto optimizer = make_unique<BrentOneDimension>(f);
           optimizer->setMessageHandler(messenger);

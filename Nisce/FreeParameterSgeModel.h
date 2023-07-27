@@ -133,7 +133,8 @@ public:
   {
     out << "-----------------------------------------------------------------" << endl;
     out << " SGE model with " << nbGenes_ << " genes and " << nbCells_ << " cells." << endl;
-    out << " Poisson distribution is modulated by a " << model_ << " distribution." << endl;
+    out << " Poisson distribution is modulated by a " << model_ << " distribution," << endl;
+    out << "     with " << nbCategories_ << " categories." << endl;
     out << "-----------------------------------------------------------------" << endl;
   }
 
