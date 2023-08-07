@@ -43,6 +43,7 @@
 #include <Bpp/Numeric/Function/ThreePointsNumericalDerivative.h>
 #include <Bpp/Numeric/Function/ReparametrizationFunctionWrapper.h>
 #include <Bpp/Numeric/Function/PowellMultiDimensions.h>
+#include <Bpp/Numeric/Function/DownhillSimplexMethod.h>
 #include <Bpp/Numeric/Function/BrentOneDimension.h>
 #include <Bpp/Numeric/DataTable.h>
 #include <Bpp/App/ApplicationTools.h>
@@ -547,23 +548,23 @@ int main(int argc, char* argv[])
           streamGenes1.close();
         }
 
-        // Hyper parameters:
-   
-        ApplicationTools::displayTask("Coarse fitting of hyper-parameters");
-        cout << endl;
-        auto feb = make_shared<LessFreeParameterSgeModel::FullLikelihood>(sgeModel);
-        auto hyperOptimizer = make_unique<PowellMultiDimensions>(feb);
-        hyperOptimizer->setStopCondition(make_shared<FunctionStopCondition>(hyperOptimizer.get()));
-        hyperOptimizer->setMessageHandler(messenger);
-        hyperOptimizer->setProfiler(profiler);
-        hyperOptimizer->setVerbose(0);
-        hyperOptimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
-        hyperOptimizer->init(feb->getParameters());
-        hyperOptimizer->getStopCondition()->setTolerance(tol1);
-        hyperOptimizer->optimize();
-        ApplicationTools::displayTaskDone();
-        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
-        sgeModel->printHyperParameters(cout);  
+        // Hyper parameters: === Note: Beta prior seems difficult to fit, we use a uniform one ===
+        //
+        //ApplicationTools::displayTask("Coarse fitting of hyper-parameters");
+        //cout << endl;
+        //auto feb = make_shared<LessFreeParameterSgeModel::FullLikelihood>(sgeModel);
+        //auto hyperOptimizer = make_unique<PowellMultiDimensions>(feb);
+        //hyperOptimizer->setStopCondition(make_shared<FunctionStopCondition>(hyperOptimizer.get()));
+        //hyperOptimizer->setMessageHandler(messenger);
+        //hyperOptimizer->setProfiler(profiler);
+        //hyperOptimizer->setVerbose(0);
+        //hyperOptimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+        //hyperOptimizer->init(feb->getParameters());
+        //hyperOptimizer->getStopCondition()->setTolerance(tol1);
+        //hyperOptimizer->optimize();
+        //ApplicationTools::displayTaskDone();
+        //ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        //sgeModel->printHyperParameters(cout);  
 
         // Then cell specific parameters:
 
@@ -602,14 +603,14 @@ int main(int argc, char* argv[])
           streamCells2.close();
         }
 
-        ApplicationTools::displayTask("Re-fitting of hyper-parameters");
-        cout << endl;
-        hyperOptimizer->init(feb->getParameters());
-        hyperOptimizer->getStopCondition()->setTolerance(tol2);
-        hyperOptimizer->optimize();
-        ApplicationTools::displayTaskDone();
-        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
-        sgeModel->printHyperParameters(cout);  
+        //ApplicationTools::displayTask("Re-fitting of hyper-parameters");
+        //cout << endl;
+        //hyperOptimizer->init(feb->getParameters());
+        //hyperOptimizer->getStopCondition()->setTolerance(tol2);
+        //hyperOptimizer->optimize();
+        //ApplicationTools::displayTaskDone();
+        //ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        //sgeModel->printHyperParameters(cout);  
 
         ApplicationTools::displayTask("Re-fitting of gene distributions");
         cout << endl;
@@ -684,14 +685,14 @@ int main(int argc, char* argv[])
           streamCells3.close();
         }
 
-        ApplicationTools::displayTask("Fine-fitting of hyper-parameters");
-        cout << endl;
-        hyperOptimizer->init(feb->getParameters());
-        hyperOptimizer->getStopCondition()->setTolerance(tol3);
-        hyperOptimizer->optimize();
-        ApplicationTools::displayTaskDone();
-        ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
-        sgeModel->printHyperParameters(cout);  
+        //ApplicationTools::displayTask("Fine-fitting of hyper-parameters");
+        //cout << endl;
+        //hyperOptimizer->init(feb->getParameters());
+        //hyperOptimizer->getStopCondition()->setTolerance(tol3);
+        //hyperOptimizer->optimize();
+        //ApplicationTools::displayTaskDone();
+        //ApplicationTools::displayResult("Log likelihood is", sgeModel->getLogLikelihood());
+        //sgeModel->printHyperParameters(cout);  
 
         ApplicationTools::displayTask("Fine-fitting of gene distributions");
         cout << endl;
@@ -736,6 +737,55 @@ int main(int argc, char* argv[])
           ofstream streamGeneResults(outputGeneResults, ios::out);
           sgeModel->printResultsForGenes(streamGeneResults);
           streamGeneResults.close();
+        }
+
+        // Compute Confidence intervals:
+        string outputGeneCIResults = ApplicationTools::getAFilePath("output.results.genes_hessian.file", nisce.getParams(), false, false);
+        if (outputGeneCIResults != "none")
+        {
+          ofstream streamGeneCIResults(outputGeneCIResults, ios::out);
+          d1_array_str params = sgeModel->distParamNames_;
+          streamGeneCIResults << "Gene";
+          for (auto p : params)
+          {
+            streamGeneCIResults << "," << p;
+          }
+          streamGeneCIResults << endl;
+
+          ApplicationTools::displayTask("Computing CI of gene distribution parameters");
+          cout << endl;
+          progress = 0;
+          d2_array_dbl hessianValues(sgeModel->nbGenes_);
+          for_each (std::execution::par,
+                    sgeModel->geneIndex_.begin(),
+                    sgeModel->geneIndex_.end(),
+                    [&](size_t i)
+          {
+            auto f = make_shared<LessFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
+            auto numDer = make_shared<ThreePointsNumericalDerivative>(f);
+            numDer->enableSecondOrderDerivatives(true);
+            numDer->enableSecondOrderCrossDerivatives(false);
+            numDer->setParametersToDerivate(params);
+            numDer->setParameters(numDer->getParameters()); //Induce calculation of derivatives.
+            hessianValues[i].resize(params.size());
+            for (size_t k = 0; k < params.size(); ++k)
+            {
+              hessianValues[i][k] = - numDer->getSecondOrderDerivative(params[k]); //We use - here as the function is -logLik
+            }
+            progress++;
+            ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
+          });
+          ApplicationTools::displayTaskDone();
+          for (size_t i = 0; i < sgeModel->nbGenes_; ++i)
+          {
+            streamGeneCIResults << sgeModel->geneIds_[i];
+            for (auto v : hessianValues[i])
+            {
+              streamGeneCIResults << "," << v;
+            }
+            streamGeneCIResults << endl; 
+          }
+          streamGeneCIResults.close();
         }
 
       }
