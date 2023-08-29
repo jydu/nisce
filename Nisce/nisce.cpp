@@ -114,9 +114,9 @@ void help()
 int main(int argc, char* argv[])
 {
   cout << "******************************************************************" << endl;
-  cout << "*                  N.I.S.C.E., version 0.0.2                     *" << endl;
+  cout << "*                  N.I.S.C.E., version 0.0.3                     *" << endl;
   cout << "* Author: J. Dutheil                        Created on  24/04/23 *" << endl;
-  cout << "*                                           Last Modif. 26/07/23 *" << endl;
+  cout << "*                                           Last Modif. 29/08/23 *" << endl;
   cout << "******************************************************************" << endl;
   cout << endl;
 
@@ -1132,6 +1132,21 @@ int main(int argc, char* argv[])
       auto partitions = DataTable::read(partitionStream, TextTools::toString(sep), true, 0);
       size_t nbPartitions = partitions->getNumberOfColumns();
       ApplicationTools::displayResult("Number of partitions found", nbPartitions);
+
+      //Check cells:
+      auto cellsInPartitions = partitions->getRowNames();
+      for (size_t i = partitions->getNumberOfRows(); i > 0; --i)
+      {
+        if (!VectorTools::contains(cellIds, cellsInPartitions[i - 1]))
+	{
+          partitions->deleteRow(i - 1);
+	  cout << "Cell " << cellsInPartitions[i - 1] << " was ignored." << endl;
+	}
+      }
+      if (partitions->getNumberOfRows() == 0)
+      {
+        throw Exception("Error!!! The cell names in the partition file do not match those in the count file.");
+      }
 
       // Initialize parameters:
       size_t nbCategories = ApplicationTools::getParameter<size_t>("nb_categories", nisce.getParams(), 5);
