@@ -184,8 +184,11 @@ int main(int argc, char* argv[])
       for (auto it = cellsToDiscard.rbegin(); it != cellsToDiscard.rend(); ++it)
       {
         v.erase(v.begin() + *it, v.begin() + *it + 1);
-        cellIds.erase(cellIds.begin() + *it, cellIds.begin() + *it + 1);
       }
+    }
+    for (auto it = cellsToDiscard.rbegin(); it != cellsToDiscard.rend(); ++it)
+    {
+      cellIds.erase(cellIds.begin() + *it, cellIds.begin() + *it + 1);
     }
     ApplicationTools::displayTaskDone();
     ApplicationTools::displayResult("Number of discarded cells", cellsToDiscard.size());
