@@ -24,7 +24,7 @@ public:
   // Distribution parameters
   size_t nbDistParams_;
   vector<string> distParamNames_;
-  vector<shared_ptr<Constraint> > distParamConstraints_;
+  vector<shared_ptr<ConstraintInterface>> distParamConstraints_;
   d2_array_dbl distParamValues_;
   d3_array_dbl distArray_;    // Intermediate calculations. Contains, for each gene, each category, two numbers: value and probability.
 
@@ -402,10 +402,10 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      r_ = getParameter("r").getValue();
+      r_ = parameter("r").getValue();
       for (size_t j = 0; j < sgeModel_->nbDistParams_; ++j)
       {
-        distParams_[j] = getParameter(sgeModel_->distParamNames_[j]).getValue();
+        distParams_[j] = parameter(sgeModel_->distParamNames_[j]).getValue();
       }
     }
 
@@ -440,7 +440,7 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      l_ = getParameter("l").getValue();
+      l_ = parameter("l").getValue();
     }
 
     double getValue() const override

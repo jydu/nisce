@@ -22,7 +22,7 @@
 
 
 // Compile with:
-// CC=gcc-12 CXX=g++-12 cmake -DCMAKE_INSTALL_PREFIX=$HOME/.local .
+// CC=gcc-12 CXX=g++-12 cmake -DCMAKE_INSTALL_PREFIX=$HOME/.local ..
 // make
 // Note: Clang not yet suported as C++17 does not implement parallelization.
 

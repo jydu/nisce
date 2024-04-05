@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2024 Julien Y. Dutheil
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# files to be ignored
+
+*.tag
+CMakeCache.txt
+CMakeFiles
+*.cmake
+*.cmake.in
+Makefile
+html
+install_manifest.txt
+.clang*
+*.sw*
+build
+
+# file to be specifically not ignored by previous rules
+
+!/CTestConfig.cmake
+!/cmake/*

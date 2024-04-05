@@ -360,8 +360,8 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      meanShape_ = getParameter("meanShape").getValue();
-      shapeShape_ = getParameter("shapeShape").getValue();
+      meanShape_ = parameter("meanShape").getValue();
+      shapeShape_ = parameter("shapeShape").getValue();
     }
 
     double getValue() const override
@@ -398,8 +398,8 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      r_ = getParameter("r").getValue();
-      mean_ = getParameter("mean").getValue();
+      r_ = parameter("r").getValue();
+      mean_ = parameter("mean").getValue();
     }
 
     double getValue() const override
@@ -433,7 +433,7 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      l_ = getParameter("l").getValue();
+      l_ = parameter("l").getValue();
     }
 
     double getValue() const override

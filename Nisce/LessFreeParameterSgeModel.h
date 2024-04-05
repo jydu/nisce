@@ -27,7 +27,7 @@ public:
   // Distribution parameters
   size_t nbDistParams_;
   vector<string> distParamNames_;
-  vector<shared_ptr<Constraint> > distParamConstraints_;
+  vector<shared_ptr<ConstraintInterface>> distParamConstraints_;
   d2_array_dbl distParamValues_;
   d3_array_dbl distArray_;    // Intermediate calculations. Contains, for each gene, each category, two numbers: value and probability.
   std::string prior_;
@@ -395,7 +395,7 @@ public:
       matchParametersValues(parameters);
       for (size_t j = 0; j < sgeModel_->nbDistParams_; ++j)
       {
-        distParams_[j] = getParameter(sgeModel_->distParamNames_[j]).getValue();
+        distParams_[j] = parameter(sgeModel_->distParamNames_[j]).getValue();
       }
     }
 
@@ -430,7 +430,7 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      l_ = getParameter("l").getValue();
+      l_ = parameter("l").getValue();
     }
 
     double getValue() const override
@@ -466,8 +466,8 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      params_[0] = getParameter("alpha").getValue();
-      params_[1] = getParameter("beta").getValue();
+      params_[0] = parameter("alpha").getValue();
+      params_[1] = parameter("beta").getValue();
       sgeModel_->computeRCategoriesBeta_(params_);
     }
 
