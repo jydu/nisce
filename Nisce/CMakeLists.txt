@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024 Julien Y. Dutheil
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # CMake script for NISCE
 # Author: Julien Dutheil
 # Created: 25/04/2023

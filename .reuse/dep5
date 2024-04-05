@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Noise Inference from Single-Cell Expression (N.I.S.C.E.)
+Upstream-Contact: Julien Y. Dutheil <dutheil@evolbio.mpg.de>
+Source: https://gitlab.gwdg.de/molsysevol/nisce
+
+# Sample paragraph, commented out:
+#
+# Files: src/*
+# Copyright: $YEAR $NAME <$CONTACT>
+# License: ...

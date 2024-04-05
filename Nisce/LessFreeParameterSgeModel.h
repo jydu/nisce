@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2024 Julien Y. Dutheil
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /*
  * =====================================================================================
  *
