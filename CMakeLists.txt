@@ -9,13 +9,23 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 # Compile options
-SET (CMAKE_CXX_FLAGS "-Wall -std=c++17 -Weffc++ -Wshadow -Wconversion")
+add_compile_options(-std=c++17 -Wall -Weffc++ -Wshadow -Wconversion)
 
-IF(NOT CMAKE_BUILD_TYPE)
-  SET(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
       "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
       FORCE)
-ENDIF(NOT CMAKE_BUILD_TYPE)
+endif(NOT CMAKE_BUILD_TYPE)
+#static linkage?
+if(NOT BUILD_STATIC)
+  set(BUILD_STATIC FALSE CACHE BOOL
+      "Enable static linkage."
+      FORCE)
+endif()
+if(BUILD_STATIC)
+  message(STATUS "Static linkage requested.")
+  add_compile_options(-static -static-libgcc)
+endif()
 
 
 include (GNUInstallDirs)

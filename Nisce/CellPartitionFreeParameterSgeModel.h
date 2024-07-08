@@ -18,6 +18,9 @@
 // From the STL:
 #include <map>
 
+// From bpp-core:
+#include <Bpp/Numeric/AbstractParameterAliasable.h>
+
 class Partition
 {
 public:
@@ -313,7 +316,7 @@ public:
 public:
   class GeneLikelihood :
     public virtual FunctionInterface,
-    public AbstractParametrizable
+    public AbstractParameterAliasable
   {
 private:
     shared_ptr<CellPartitionFreeParameterSgeModel> sgeModel_;
@@ -323,7 +326,7 @@ private:
 
 public:
     GeneLikelihood(shared_ptr<CellPartitionFreeParameterSgeModel> sgeModel, size_t geneId) :
-      AbstractParametrizable(""),
+      AbstractParameterAliasable(""),
       sgeModel_(sgeModel),
       geneId_(geneId),
       r_(0),

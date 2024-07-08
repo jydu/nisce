@@ -1158,6 +1158,8 @@ int main(int argc, char* argv[])
       double tol1 = ApplicationTools::getDoubleParameter("tolerance1", nisce.getParams(), 0.01);
       double tol2 = ApplicationTools::getDoubleParameter("tolerance2", nisce.getParams(), 0.0001);
       double tol3 = ApplicationTools::getDoubleParameter("tolerance3", nisce.getParams(), 0.000001);
+      bool aliasShape = ApplicationTools::getBooleanParameter("alias_shape", nisce.getParams(), true);
+      ApplicationTools::displayBooleanResult("Single shape parameter", aliasShape);
       
       string partitionResultFile = ApplicationTools::getStringParameter("cell_partition.result.file", nisce.getParams(), "None");
 
@@ -1196,19 +1198,24 @@ int main(int argc, char* argv[])
                  [&](size_t i)
         {
           auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
+	  if (aliasShape) {
+	    for (size_t j = 1; j < partition.size(); ++j) {
+	      f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
+	    }
+	  }
           auto optimizer = make_unique<PowellMultiDimensions>(f);
           optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
           optimizer->setMessageHandler(messenger);
           optimizer->setProfiler(profiler);
           optimizer->setVerbose(0);
           optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
-          optimizer->init(f->getParameters());
+          optimizer->init(f->getIndependentParameters());
           optimizer->getStopCondition()->setTolerance(tol1);
           optimizer->optimize();
-          sgeModel->rs_[i] = optimizer->getParameterValue("r");
+          sgeModel->rs_[i] = f->getParameterValue("r");
           for (size_t k = 0; k < sgeModel->nbDistParams_; ++k)
           {
-            sgeModel->distParamValues_[i][k] = optimizer->getParameterValue(sgeModel->distParamNames_[k]);
+            sgeModel->distParamValues_[i][k] = f->getParameterValue(sgeModel->distParamNames_[k]);
           }
           progress++;
           ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
@@ -1244,7 +1251,7 @@ int main(int argc, char* argv[])
           optimizer->init(f->getParameters());
           optimizer->getStopCondition()->setTolerance(tol2);
           optimizer->optimize();
-          sgeModel->ls_[j] = optimizer->getParameterValue("l");
+          sgeModel->ls_[j] = f->getParameterValue("l");
           progress++;
           ApplicationTools::displayGauge(progress, sgeModel->cellIndex_.size() - 1, '=');
         });
@@ -1268,19 +1275,24 @@ int main(int argc, char* argv[])
                  [&](size_t i)
         {
           auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
+	  if (aliasShape) {
+	    for (size_t j = 1; j < partition.size(); ++j) {
+	      f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
+	    }
+	  }
           auto optimizer = make_unique<PowellMultiDimensions>(f);
           optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
           optimizer->setMessageHandler(messenger);
           optimizer->setProfiler(profiler);
           optimizer->setVerbose(0);
           optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
-          optimizer->init(f->getParameters());
+          optimizer->init(f->getIndependentParameters());
           optimizer->getStopCondition()->setTolerance(tol2);
           optimizer->optimize();
-          sgeModel->rs_[i] = optimizer->getParameterValue("r");
+          sgeModel->rs_[i] = f->getParameterValue("r");
           for (size_t k = 0; k < sgeModel->nbDistParams_; ++k)
           {
-            sgeModel->distParamValues_[i][k] = optimizer->getParameterValue(sgeModel->distParamNames_[k]);
+            sgeModel->distParamValues_[i][k] = f->getParameterValue(sgeModel->distParamNames_[k]);
           }
           progress++;
           ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
@@ -1316,7 +1328,7 @@ int main(int argc, char* argv[])
           optimizer->init(f->getParameters());
           optimizer->getStopCondition()->setTolerance(tol3);
           optimizer->optimize();
-          sgeModel->ls_[j] = optimizer->getParameterValue("l");
+          sgeModel->ls_[j] = f->getParameterValue("l");
           progress++;
           ApplicationTools::displayGauge(progress, sgeModel->cellIndex_.size() - 1, '=');
         });
@@ -1340,19 +1352,24 @@ int main(int argc, char* argv[])
                   [&](size_t i)
         {
           auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
+	  if (aliasShape) {
+	    for (size_t j = 1; j < partition.size(); ++j) {
+	      f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
+	    }
+	  }
           auto optimizer = make_unique<PowellMultiDimensions>(f);
           optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
           optimizer->setMessageHandler(messenger);
           optimizer->setProfiler(profiler);
           optimizer->setVerbose(0);
           optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
-          optimizer->init(f->getParameters());
+          optimizer->init(f->getIndependentParameters());
           optimizer->getStopCondition()->setTolerance(tol2);
           optimizer->optimize();
-          sgeModel->rs_[i] = optimizer->getParameterValue("r");
+          sgeModel->rs_[i] = f->getParameterValue("r");
           for (size_t k = 0; k < sgeModel->nbDistParams_; ++k)
           {
-            sgeModel->distParamValues_[i][k] = optimizer->getParameterValue(sgeModel->distParamNames_[k]);
+            sgeModel->distParamValues_[i][k] = f->getParameterValue(sgeModel->distParamNames_[k]);
           }
           progress++;
           ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
