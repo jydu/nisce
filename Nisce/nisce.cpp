@@ -1142,10 +1142,10 @@ int main(int argc, char* argv[])
       for (size_t i = partitions->getNumberOfRows(); i > 0; --i)
       {
         if (!VectorTools::contains(cellIds, cellsInPartitions[i - 1]))
-	{
+        {
           partitions->deleteRow(i - 1);
-	  cout << "Cell " << cellsInPartitions[i - 1] << " was ignored." << endl;
-	}
+          cout << "Cell " << cellsInPartitions[i - 1] << " was ignored." << endl;
+        }
       }
       if (partitions->getNumberOfRows() == 0)
       {
@@ -1198,11 +1198,11 @@ int main(int argc, char* argv[])
                  [&](size_t i)
         {
           auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
-	  if (aliasShape) {
-	    for (size_t j = 1; j < partition.size(); ++j) {
-	      f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
-	    }
-	  }
+          if (aliasShape) {
+            for (size_t j = 1; j < partition.size(); ++j) {
+              f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
+            }
+          }
           auto optimizer = make_unique<PowellMultiDimensions>(f);
           optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
           optimizer->setMessageHandler(messenger);
@@ -1275,11 +1275,11 @@ int main(int argc, char* argv[])
                  [&](size_t i)
         {
           auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
-	  if (aliasShape) {
-	    for (size_t j = 1; j < partition.size(); ++j) {
-	      f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
-	    }
-	  }
+          if (aliasShape) {
+            for (size_t j = 1; j < partition.size(); ++j) {
+              f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
+            }
+          }
           auto optimizer = make_unique<PowellMultiDimensions>(f);
           optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
           optimizer->setMessageHandler(messenger);
@@ -1352,11 +1352,11 @@ int main(int argc, char* argv[])
                   [&](size_t i)
         {
           auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
-	  if (aliasShape) {
-	    for (size_t j = 1; j < partition.size(); ++j) {
-	      f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
-	    }
-	  }
+          if (aliasShape) {
+            for (size_t j = 1; j < partition.size(); ++j) {
+              f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
+            }
+          }
           auto optimizer = make_unique<PowellMultiDimensions>(f);
           optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
           optimizer->setMessageHandler(messenger);
@@ -1397,6 +1397,67 @@ int main(int argc, char* argv[])
         // Store model results:
         partitionLogLikelihoods[p] = sgeModel->getLogLikelihood();
         partitionNbParameters[p] = sgeModel->getNumberOfParameters();
+
+        // Compute Confidence intervals:
+        string outputGeneCIResults = ApplicationTools::getAFilePath("output.results.genes_hessian.file", nisce.getParams(), false, false);
+        if (outputGeneCIResults != "none")
+        {
+          ofstream streamGeneCIResults(outputGeneCIResults + ".part" + TextTools::toString(p + 1), ios::out);
+          auto f0 = make_unique<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, 0);
+          if (aliasShape) {
+            for (size_t j = 1; j < partition.size(); ++j) {
+              f0->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
+            }
+          }
+          d1_array_str params = f0->getIndependentParameters().getParameterNames();
+          streamGeneCIResults << "Gene";
+          for (auto pm : params)
+          {
+            streamGeneCIResults << "," << pm;
+          }
+          streamGeneCIResults << endl;
+
+          ApplicationTools::displayTask("Computing CI of gene distribution parameters");
+          cout << endl;
+          progress = 0;
+          d2_array_dbl hessianValues(sgeModel->nbGenes_);
+          for_each (std::execution::par,
+                    sgeModel->geneIndex_.begin(),
+                    sgeModel->geneIndex_.end(),
+                    [&](size_t i)
+          {
+            auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
+            if (aliasShape) {
+              for (size_t j = 1; j < partition.size(); ++j) {
+                f->aliasParameters("0.Shape", TextTools::toString(j) + ".Shape");
+              }
+            }
+            auto numDer = make_shared<ThreePointsNumericalDerivative>(f);
+            numDer->enableSecondOrderDerivatives(true);
+            numDer->enableSecondOrderCrossDerivatives(false);
+            numDer->setParametersToDerivate(params);
+            numDer->setParameters(numDer->getParameters()); //Induce calculation of derivatives.
+            hessianValues[i].resize(params.size());
+            for (size_t k = 0; k < params.size(); ++k)
+            {
+              hessianValues[i][k] = - numDer->getSecondOrderDerivative(params[k]); //We use - here as the function is -logLik
+            }
+            progress++;
+            ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
+          });
+          ApplicationTools::displayTaskDone();
+          for (size_t i = 0; i < sgeModel->nbGenes_; ++i)
+          {
+            streamGeneCIResults << sgeModel->geneIds_[i];
+            for (auto v : hessianValues[i])
+            {
+              streamGeneCIResults << "," << v;
+            }
+            streamGeneCIResults << endl; 
+          }
+          streamGeneCIResults.close();
+        }
+
 
       }
 
