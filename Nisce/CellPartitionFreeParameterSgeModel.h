@@ -294,7 +294,7 @@ public:
 
   void printResultsForGenes(ostream& out) const
   {
-    out << "Gene" << endl;
+    out << "Gene";
     for (auto& p : partition_.partitionMap)
     {
       out << "," << p.first << ".Mean," << p.first << ".Noise";
