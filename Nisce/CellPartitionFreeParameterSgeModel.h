@@ -153,7 +153,8 @@ public:
     out << "-----------------------------------------------------------------" << endl;
     out << " SGE model with " << nbGenes_ << " genes and " << nbCells_ << " cells." << endl;
     out << " Model has " << partition_.size() << " cell groups." << endl;
-    out << " Poisson distribution is modulated by a Gamma  distribution." << endl;
+    out << " Poisson distribution is modulated by a Gamma distribution," << endl;
+    out << "     with " << nbCategories_ << " categories." << endl;
     out << "-----------------------------------------------------------------" << endl;
   }
 
@@ -254,13 +255,13 @@ public:
 
   double getMeanForGene(size_t i, size_t partitionIndex) const
   {
-    return distParamValues_[i][partitionIndex*partition_.size()];
+    return distParamValues_[i][partitionIndex * 2];
   }
 
   double getNoiseForGene(size_t i, size_t partitionIndex) const
   {
     // This is 1/ shape
-    return 1. / distParamValues_[i][partitionIndex*partition_.size() + 1];
+    return 1. / distParamValues_[i][partitionIndex * 2 + 1];
   }
 
   void printGeneParameters(ostream& out) const

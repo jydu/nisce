@@ -13,7 +13,7 @@ min_nb_cells_with_obs = 10
 cell_partition.file = None
 method = 
 //Number of discrete categories to modulate the Poisson process:
-nb_categories = 10
+nb_categories = 4 //10
 
 PREFIX=$(DATA)_$(method)
 

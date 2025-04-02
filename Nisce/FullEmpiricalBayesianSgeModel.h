@@ -122,7 +122,7 @@ public:
   {
     out << "-----------------------------------------------------------------" << endl;
     out << " SGE model with " << nbGenes_ << " genes and " << nbCells_ << " cells." << endl;
-    out << " Poisson distribution is modulated by a gamma distribution." << endl;
+    out << " Poisson distribution is modulated by a Gamma distribution." << endl;
     out << " Gamma param. are estimated via an empirical Bayesian approach." << endl;
     out << "-----------------------------------------------------------------" << endl;
   }
