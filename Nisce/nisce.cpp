@@ -1199,8 +1199,17 @@ int main(int argc, char* argv[])
         {
           auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
           if (aliasShape) {
-            for (size_t j = 2; j <= partition.size(); ++j) {
-              f->aliasParameters("1.Shape", TextTools::toString(j) + ".Shape");
+            auto pnames = f->getParameters().getParameterNames();
+            pnames.erase(remove_if(pnames.begin(),
+                                   pnames.end(),
+                                   [](const string& name) {
+                                     return(!name.ends_with("Shape"));
+                                   }),
+                         pnames.end());
+            for (auto name : pnames) {
+              if (name != pnames[0] ) {
+                f->aliasParameters(pnames[0], name);
+              }
             }
           }
           auto optimizer = make_unique<PowellMultiDimensions>(f);
@@ -1276,8 +1285,17 @@ int main(int argc, char* argv[])
         {
           auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
           if (aliasShape) {
-            for (size_t j = 2; j <= partition.size(); ++j) {
-              f->aliasParameters("1.Shape", TextTools::toString(j) + ".Shape");
+            auto pnames = f->getParameters().getParameterNames();
+            pnames.erase(remove_if(pnames.begin(),
+                                   pnames.end(),
+                                   [](const string& name) {
+                                     return(!name.ends_with("Shape"));
+                                   }),
+                         pnames.end());
+            for (auto name : pnames) {
+              if (name != pnames[0] ) {
+                f->aliasParameters(pnames[0], name);
+              }
             }
           }
           auto optimizer = make_unique<PowellMultiDimensions>(f);
@@ -1353,8 +1371,17 @@ int main(int argc, char* argv[])
         {
           auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
           if (aliasShape) {
-            for (size_t j = 2; j <= partition.size(); ++j) {
-              f->aliasParameters("1.Shape", TextTools::toString(j) + ".Shape");
+            auto pnames = f->getParameters().getParameterNames();
+            pnames.erase(remove_if(pnames.begin(),
+                                   pnames.end(),
+                                   [](const string& name) {
+                                     return(!name.ends_with("Shape"));
+                                   }),
+                         pnames.end());
+            for (auto name : pnames) {
+              if (name != pnames[0] ) {
+                f->aliasParameters(pnames[0], name);
+              }
             }
           }
           auto optimizer = make_unique<PowellMultiDimensions>(f);
@@ -1405,8 +1432,17 @@ int main(int argc, char* argv[])
           ofstream streamGeneCIResults(outputGeneCIResults + ".part" + TextTools::toString(p + 1), ios::out);
           auto f0 = make_unique<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, 0);
           if (aliasShape) {
-            for (size_t j = 2; j <= partition.size(); ++j) {
-              f0->aliasParameters("1.Shape", TextTools::toString(j) + ".Shape");
+            auto pnames = f0->getParameters().getParameterNames();
+            pnames.erase(remove_if(pnames.begin(),
+                                   pnames.end(),
+                                   [](const string& name) {
+                                     return(!name.ends_with("Shape"));
+                                   }),
+                         pnames.end());
+            for (auto name : pnames) {
+              if (name != pnames[0] ) {
+                f0->aliasParameters(pnames[0], name);
+              }
             }
           }
           d1_array_str params = f0->getIndependentParameters().getParameterNames();
@@ -1428,8 +1464,17 @@ int main(int argc, char* argv[])
           {
             auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
             if (aliasShape) {
-              for (size_t j = 2; j <= partition.size(); ++j) {
-                f->aliasParameters("1.Shape", TextTools::toString(j) + ".Shape");
+              auto pnames = f->getParameters().getParameterNames();
+              pnames.erase(remove_if(pnames.begin(),
+                                     pnames.end(),
+                                     [](const string& name) {
+                                       return(!name.ends_with("Shape"));
+                                     }),
+                           pnames.end());
+              for (auto name : pnames) {
+                if (name != pnames[0] ) {
+                  f->aliasParameters(pnames[0], name);
+                }
               }
             }
             auto numDer = make_shared<ThreePointsNumericalDerivative>(f);

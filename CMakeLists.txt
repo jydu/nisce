@@ -5,11 +5,11 @@
 cmake_minimum_required(VERSION 3.7)
 project(Nisce CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 # Compile options
-add_compile_options(-std=c++17 -Wall -Weffc++ -Wshadow -Wconversion)
+add_compile_options(-Wall -Weffc++ -Wshadow -Wconversion)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
