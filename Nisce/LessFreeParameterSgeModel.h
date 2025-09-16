@@ -15,11 +15,15 @@
 
 #include "SgeModel.h"
 
+// From BOOST:
+#include <boost/math/special_functions/logsumexp.hpp>
+
 /**
  * @brief Free parameter model (mean and noise), but drop-out parameter has a priori distribution and is fitted with an empricial Bayesian approach.
  */
 class LessFreeParameterSgeModel:
-  public SgeModel2
+  public SgeModel2,
+  public std::enable_shared_from_this<LessFreeParameterSgeModel>
 {
 public:
   string model_;
@@ -127,15 +131,82 @@ public:
       {
         distParamValues_[i][j] = 1.;
       }
+      computeCategories(i, distParamValues_[i]);
     }
-    // Library scale is 1.
+    // Library scale is the library size divided by the mean library size.
+    double meanLibSize = 0.;
     for (size_t j  = 0; j < nbCells_; ++j)
     {
-      ls_[j] = 1.;
+      unsigned int libSize = 0;
+      for (size_t i  = 0; i < nbGenes_; ++i)
+      {
+        libSize += counts_[i][j];
+      }
+      ls_[j] = static_cast<double>(libSize);
+      meanLibSize += static_cast<double>(libSize) / static_cast<double>(nbCells_);
+    }
+    for (size_t j  = 0; j < nbCells_; ++j)
+    {
+      ls_[j] /= meanLibSize;
     }
     // Drop-out beta distribution parameters:
     if (prior_ == "Beta")
-      computeRCategoriesBeta_({1., 1.});
+      setHyperparameters({0.5, 0.5});
+    else if (prior_ != "Uniform")
+      throw Exception("Unknown prior distribution: " + prior_);
+
+  }
+  
+  /**
+   * @brief Set parameter values based on explicit values
+   *
+   * Note: we assume cells/genes are in the right order and do not check their names. 
+   */
+  void initParameters(const DataTable& geneParameters, const DataTable& cellParameters)
+  {
+    if (geneParameters.getNumberOfRows() != nbGenes_) {
+      throw DimensionException("Incorrect number of gene parameters.", geneParameters.getNumberOfRows(), nbCells_);
+    }
+    if (cellParameters.getNumberOfRows() != nbCells_) {
+      throw DimensionException("Incorrect number of cell parameters.", cellParameters.getNumberOfRows(), nbCells_);
+    }
+
+    // Distributions
+    if (model_ == "ScaledBeta") {
+      auto colScale = geneParameters.getColumn("Scale");
+      auto colAlpha = geneParameters.getColumn("Alpha");
+      auto colBeta = geneParameters.getColumn("Beta");
+      for (size_t i  = 0; i < nbGenes_; ++i) {
+        distParamValues_[i][0] = TextTools::toDouble(colScale[i]);
+        distParamValues_[i][1] = TextTools::toDouble(colAlpha[i]);
+        distParamValues_[i][2] = TextTools::toDouble(colBeta[i]);
+        computeCategories(i, distParamValues_[i]);
+      }
+    } else if (model_ == "Gamma") {
+      auto colMean = geneParameters.getColumn("Mean");
+      auto colShape = geneParameters.getColumn("Shape");
+      for (size_t i  = 0; i < nbGenes_; ++i) {
+        distParamValues_[i][0] = TextTools::toDouble(colMean[i]);
+        distParamValues_[i][1] = TextTools::toDouble(colShape[i]);
+        computeCategories(i, distParamValues_[i]);
+      }
+    } else {
+      throw Exception("Unsupported model: " + model_);
+    }
+
+    // Library scale
+    auto colL = cellParameters.getColumn("l");
+    for (size_t j  = 0; j < nbCells_; ++j)
+    {
+      ls_[j] = TextTools::toDouble(colL[j]);
+    }
+    // TODO hyper parameters?
+  }
+
+  void setHyperparameters(const d1_array_dbl& rHyperParams)
+  {
+    if (prior_ == "Beta")
+      computeRCategoriesBeta_(rHyperParams);
     else if (prior_ == "Uniform")
       computeRCategoriesUniform_();
     else 
@@ -181,30 +252,32 @@ public:
   double computeLogLikelihoodForGene(size_t i, const d1_array_dbl& distParams)
   {
     computeCategories(i, distParams);
-    double logLikelihood = 0.;
-    for (size_t j = 0; j < nbCells_; ++j)
-    {
-      d1_array_dbl s(nbCategories_);
-      for (size_t k = 0; k < nbCategories_; ++k)
+    vector<double> condLogLikelihoods(nbRCategories_);
+    for (size_t r = 0; r < nbRCategories_; ++r) {
+      double condLogLikelihood = log(rCatProbs_[r]);
+      for (size_t j = 0; j < nbCells_; ++j)
       {
-        s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] * ls_[j]) * distArray_[i][k][1];
-      }
-      auto S = accumulate(s.begin(), s.end(), 0.);
-      double P = 0;
-      if (counts_[i][j] == 0)
-      {
-        for (size_t k = 0; k < nbRCategories_; ++k) {
-          P += (rCatVals_[k] + (1. - rCatVals_[k]) * S) * rCatProbs_[k];
+        d1_array_dbl s(nbCategories_);
+        for (size_t k = 0; k < nbCategories_; ++k)
+        {
+          s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] * ls_[j]) * distArray_[i][k][1];
         }
-      }
-      else
-      {
-        for (size_t k = 0; k < nbRCategories_; ++k) {
-          P += (1. - rCatVals_[k]) * S * rCatProbs_[k];
+        auto S = accumulate(s.begin(), s.end(), 0.);
+        double P;
+        if (counts_[i][j] == 0)
+        {
+          P = (rCatVals_[r] + (1. - rCatVals_[r]) * S);
         }
+        else
+        {
+          P = (1. - rCatVals_[r]) * S;
+        }
+        condLogLikelihood += log(P);
       }
-      logLikelihood += log(P);
+      condLogLikelihoods[r] = condLogLikelihood;
     }
+    double logLikelihood = boost::math::logsumexp(condLogLikelihoods);
+
     if (isnan(logLikelihood) || isinf(logLikelihood))
     {
       throw (Exception("Error when computing likelihood."));
@@ -214,6 +287,7 @@ public:
 
   double computeLogLikelihoodForCell(size_t j, double l)
   {
+    //Note: the dropout probabilities are assumed to independent between cell. This function should only be use to estimate cell-specific parameters!
     double logLikelihood = 0.;
     for (size_t i = 0; i < nbGenes_; ++i)
     {
@@ -257,12 +331,12 @@ public:
 
   unsigned int getNumberOfParameters() const override
   {
-    return static_cast<unsigned int>(nbCells_ + nbGenes_ * (nbDistParams_ + 1));
+    return static_cast<unsigned int>((prior_ == "Beta" ? 2 : 0) + nbCells_ + nbGenes_ * (nbDistParams_ + 1));
   }
 
   double getAicForGene(size_t i) const
   {
-    return 2. * static_cast<double>(nbDistParams_ + 1) - 2. * getLogLikelihoodForGene(i); // Needs to account for r too (hence the +1).
+    return 2. * static_cast<double>(nbDistParams_) - 2. * getLogLikelihoodForGene(i);
   }
 
   double getMeanForGene(size_t i) const
@@ -297,7 +371,7 @@ public:
 
   void printGeneParameters(ostream& out) const
   {
-    out << "Gene,";
+    out << "Gene";
     for (auto p : distParamNames_)
     {
       out << "," << p;
@@ -324,11 +398,27 @@ public:
     }
   }
 
+  void displayHyperParameters(ostream& out) const
+  {
+    out << "- Drop-out hyper-parameters:";
+    if (prior_ == "Beta") {
+      out << endl;
+      out << "  * Alpha: " << rHyperParams_[0] << endl;
+      out << "  * Beta: "  << rHyperParams_[1] << endl;
+    } else {
+      out << "None." << endl;
+    }
+  }
+
   void printHyperParameters(ostream& out) const
   {
-    out << "- Drop-out hyper parameters:" << endl;
-    out << "  * Alpha: " << rHyperParams_[0] << endl;
-    out << "  * Beta: "  << rHyperParams_[1] << endl;
+    out << "# Prior distribution of dropout probabilities:" << endl;
+    out << "dropout_prior = " << prior_;
+    out << "(nb_categories = " << nbRCategories_;
+    if (prior_ == "Beta") {
+      out << ", alpha = " << rHyperParams_[0] << ", beta = " << rHyperParams_[1];
+    }
+    out << ")" << endl;
   }
 
   void printResultsForGenes(ostream& out) const
@@ -338,6 +428,90 @@ public:
     for (size_t i = 0; i < nbGenes_; ++i)
     {
       out << geneIds_[i] << "," << getMeanForGene(i) << "," << getNoiseForGene(i) << endl;
+    }
+  }
+
+  /**
+   * Posterior estimates
+   */
+  double computeDropoutRatePosteriorEstimateForGene(size_t i, double& maxProb, double& dropoutWithMaxProb, double& entropy) const
+  {
+    vector<double> condLogLikelihoods(nbRCategories_);
+    for (size_t r = 0; r < nbRCategories_; ++r) {
+      double condLogLikelihood = log(rCatProbs_[r]);
+      for (size_t j = 0; j < nbCells_; ++j)
+      {
+        d1_array_dbl s(nbCategories_);
+        for (size_t k = 0; k < nbCategories_; ++k)
+        {
+          s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] * ls_[j]) * distArray_[i][k][1];
+        }
+        auto S = accumulate(s.begin(), s.end(), 0.);
+        double P = 0;
+        if (counts_[i][j] == 0)
+        {
+          P += (rCatVals_[r] + (1. - rCatVals_[r]) * S);
+        }
+        else
+        {
+          P += (1. - rCatVals_[r]) * S;
+        }
+        condLogLikelihood += log(P);
+      }
+      condLogLikelihoods[r] = condLogLikelihood;
+    }
+    double logLikelihood = boost::math::logsumexp(condLogLikelihoods);
+
+    if (isnan(logLikelihood) || isinf(logLikelihood))
+    {
+      throw (Exception("Error when computing likelihood."));
+    }
+    
+    double postR = 0.;
+    maxProb = 0;
+    entropy = 0;
+    for (size_t r = 0; r < nbRCategories_; ++r) {
+      double prob = exp(condLogLikelihoods[r] - logLikelihood);
+      postR += rCatVals_[r] * prob;
+      if (prob > maxProb) {
+	maxProb = prob;
+	dropoutWithMaxProb = rCatVals_[r];
+      }
+      if (prob > 0)
+        entropy -= prob * log(prob);
+    }
+    return postR;
+  }
+
+  std::vector<double> computeDropoutRatePosteriorEstimates(
+      vector<double>& maxProbs,
+      vector<double>& dropoutWithMaxProbs,
+      vector<double>& entropies) const
+  {
+    vector<double> postRs(nbGenes_);
+    maxProbs.resize(nbGenes_);
+    dropoutWithMaxProbs.resize(nbGenes_);
+    entropies.resize(nbGenes_);
+    ApplicationTools::displayTask("Computing post. estimates for dropout");
+    cout << endl;
+    for (size_t i = 0; i < nbGenes_; ++i)
+    {
+      ApplicationTools::displayGauge(i + 1, nbGenes_);
+      postRs[i] = computeDropoutRatePosteriorEstimateForGene(i, maxProbs[i], dropoutWithMaxProbs[i], entropies[i]);
+    }
+    ApplicationTools::displayTaskDone();
+    return postRs;
+  }
+
+  void printGenePosteriorEstimates(ostream& out) const
+  {
+    out << "Gene,rAvg,rMax,maxProb,entropy" << endl;
+
+    vector<double> maxProbs, dropoutWithMaxProbs, entropies;
+    auto postRs = computeDropoutRatePosteriorEstimates(maxProbs, dropoutWithMaxProbs, entropies);
+    for (size_t i = 0; i < nbGenes_; ++i)
+    {
+      out << geneIds_[i] << "," << postRs[i] << "," << dropoutWithMaxProbs[i] << "," << maxProbs[i] << "," << entropies[i] << endl;
     }
   }
 
@@ -477,6 +651,112 @@ public:
     }
   };
 
+
+  void optimize(
+      shared_ptr<OutputStream> profiler,
+      shared_ptr<OutputStream> messenger,
+      const std::vector<OptimizationParameters>& opt)
+  {
+    for (const auto& ppt : opt)
+    {
+      ApplicationTools::displayMessage("* " + ppt.description);
+
+      // Hyper parameters:
+      if (prior_ == "Beta" && ppt.estimateHyperParameters)
+      {
+        ApplicationTools::displayTask("  - Hyper-parameters");
+        cout << endl;
+        auto feb = make_shared<FullLikelihood>(shared_from_this());
+        auto hyperOptimizer = make_unique<PowellMultiDimensions>(feb);
+        hyperOptimizer->setStopCondition(make_shared<FunctionStopCondition>(hyperOptimizer.get()));
+        hyperOptimizer->setMessageHandler(messenger);
+        hyperOptimizer->setProfiler(profiler);
+        hyperOptimizer->setVerbose(0);
+        hyperOptimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+        hyperOptimizer->init(feb->getParameters());
+        hyperOptimizer->getStopCondition()->setTolerance(ppt.tolerance);
+        hyperOptimizer->optimize();
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("Log likelihood is", getLogLikelihood());
+        displayHyperParameters(cout);  
+      }
+      if (ppt.outputGenesHyper != "none")
+      {
+        ofstream streamHyperResults(ppt.outputGenesHyper, ios::out);
+        printHyperParameters(streamHyperResults);
+        streamHyperResults.close();
+      }
+
+      // Cell-specific parameters:
+      if (ppt.estimateNorms)
+      {
+        ApplicationTools::displayTask("  - Cell-specific parameters"); cout << endl;
+        unsigned int progress = 0;
+        for_each (std::execution::par,
+                  cellIndex_.begin(),
+                  cellIndex_.end(),
+                  [&](size_t j)
+        {
+          auto f = make_shared<CellLikelihood>(shared_from_this(), j);
+          auto optimizer = make_unique<BrentOneDimension>(f);
+          optimizer->setMessageHandler(messenger);
+          optimizer->setProfiler(profiler);
+          optimizer->setVerbose(0);
+          optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+          optimizer->setInitialInterval(0.001, 100);
+          optimizer->init(f->getParameters());
+          optimizer->getStopCondition()->setTolerance(ppt.tolerance);
+          optimizer->optimize();
+          ls_[j] = optimizer->getParameterValue("l");
+          progress++;
+          ApplicationTools::displayGauge(progress, cellIndex_.size() - 1, '=');
+        });
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("    Log likelihood is", getLogLikelihood());
+      }
+      if (ppt.outputCells != "none" && ppt.outputCells != "None")
+      {
+        ofstream streamCells(ppt.outputCells, ios::out);
+        printCellParameters(streamCells);
+        streamCells.close();
+      }
+
+      // Gene-specific parameters:
+      ApplicationTools::displayTask("  - Gene distributions"); cout << endl;
+      unsigned int progress = 0;
+      for_each (std::execution::par,
+                geneIndex_.begin(),
+                geneIndex_.end(),
+                [&](size_t i)
+      {
+        auto f = make_shared<GeneLikelihood>(shared_from_this(), i);
+        auto optimizer = make_unique<PowellMultiDimensions>(f);
+        optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
+        optimizer->setMessageHandler(messenger);
+        optimizer->setProfiler(profiler);
+        optimizer->setVerbose(0);
+        optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+        optimizer->init(f->getParameters());
+        optimizer->getStopCondition()->setTolerance(ppt.tolerance);
+        optimizer->optimize();
+        for (size_t k = 0; k < nbDistParams_; ++k)
+        {
+          distParamValues_[i][k] = optimizer->getParameterValue(distParamNames_[k]);
+        }
+        progress++;
+        ApplicationTools::displayGauge(progress, geneIndex_.size() - 1, '=');
+      });
+      ApplicationTools::displayTaskDone();
+      ApplicationTools::displayResult("    Log likelihood is", getLogLikelihood());
+ 
+      if (ppt.outputGenes != "none" && ppt.outputGenes != "None")
+      {
+        ofstream streamGenes(ppt.outputGenes, ios::out);
+        printGeneParameters(streamGenes);
+        streamGenes.close();
+      }
+    }
+  }
 
 };
 

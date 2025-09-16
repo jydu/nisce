@@ -13,10 +13,13 @@
 #ifndef _FREE_PARAMETER_SGE_MODEL_H_
 #define _FREE_PARAMETER_SGE_MODEL_H_
 
+#include <Bpp/Numeric/Random/RandomTools.h>
+
 #include "SgeModel.h"
 
 class FreeParameterSgeModel:
-  public SgeModel
+  public SgeModel,
+  public std::enable_shared_from_this<FreeParameterSgeModel>
 {
 public:
   string model_;
@@ -83,6 +86,8 @@ public:
     }
   }
 
+  virtual ~FreeParameterSgeModel() {}
+
 public:
   /**
    * @brief Recomputes the Discretized Poisson modulated PDF for a given gene.
@@ -117,16 +122,77 @@ public:
       if (c == nbCells_) c = nbCells_ - 1;
       double s = accumulate(counts_[i].begin(), counts_[i].end(), 0.);
       rs_[i] = static_cast<double>(c) / static_cast<double>(nbCells_);
-      distParamValues_[i][0] = s / static_cast<double>(nbCells_ - c);
+      distParamValues_[i][0] = min(s / static_cast<double>(nbCells_ - c), 999.);
       for (size_t j = 1; j < nbDistParams_; ++j)
       {
         distParamValues_[i][j] = 1.;
       }
     }
-    // Library scale is 1.
+    // Library scale is the library size divided by the mean library size.
+    double meanLibSize = 0.;
     for (size_t j  = 0; j < nbCells_; ++j)
     {
-      ls_[j] = 1.;
+      unsigned int libSize = 0;
+      for (size_t i  = 0; i < nbGenes_; ++i)
+      {
+        libSize += counts_[i][j];
+      }
+      ls_[j] = static_cast<double>(libSize);
+      meanLibSize += static_cast<double>(libSize) / static_cast<double>(nbCells_);
+    }
+    for (size_t j  = 0; j < nbCells_; ++j)
+    {
+      ls_[j] /= meanLibSize;
+    }
+  }
+
+  /**
+   * @brief Set parameter values based on explicit values
+   *
+   * Note: we assume cells/genes are in the right order and do not check their names. 
+   */
+  void initParameters(const DataTable& geneParameters, const DataTable& cellParameters)
+  {
+    if (geneParameters.getNumberOfRows() != nbGenes_) {
+      throw DimensionException("Incorrect number of gene parameters.", geneParameters.getNumberOfRows(), nbCells_);
+    }
+    if (cellParameters.getNumberOfRows() != nbCells_) {
+      throw DimensionException("Incorrect number of cell parameters.", cellParameters.getNumberOfRows(), nbCells_);
+    }
+
+    // Dropout  
+    auto colR = geneParameters.getColumn("r");
+    for (size_t i  = 0; i < nbGenes_; ++i)
+    {
+      rs_[i] = TextTools::toDouble(colR[i]);
+    }
+
+    // Distributions
+    if (model_ == "ScaledBeta") {
+      auto colScale = geneParameters.getColumn("Scale");
+      auto colAlpha = geneParameters.getColumn("Alpha");
+      auto colBeta = geneParameters.getColumn("Beta");
+      for (size_t i  = 0; i < nbGenes_; ++i) {
+        distParamValues_[i][0] = TextTools::toDouble(colScale[i]);
+        distParamValues_[i][1] = TextTools::toDouble(colAlpha[i]);
+        distParamValues_[i][2] = TextTools::toDouble(colBeta[i]);
+      }
+    } else if (model_ == "Gamma") {
+      auto colMean = geneParameters.getColumn("Mean");
+      auto colShape = geneParameters.getColumn("Shape");
+      for (size_t i  = 0; i < nbGenes_; ++i) {
+        distParamValues_[i][0] = TextTools::toDouble(colMean[i]);
+        distParamValues_[i][1] = TextTools::toDouble(colShape[i]);
+      }
+    } else {
+      throw Exception("Unsupported model: " + model_);
+    }
+
+    // Library scale
+    auto colL = cellParameters.getColumn("l");
+    for (size_t j  = 0; j < nbCells_; ++j)
+    {
+      ls_[j] = TextTools::toDouble(colL[j]);
     }
   }
 
@@ -142,6 +208,19 @@ public:
     out << "-----------------------------------------------------------------" << endl;
   }
 
+  unsigned int drawCount(size_t geneIndex, size_t cellIndex) const override
+  {
+    if (model_ == "ScaledBeta")
+    {
+      return drawCountScaledBeta_(geneIndex, cellIndex);
+    }
+    if (model_ == "Gamma")
+    {
+      return drawCountGamma_(geneIndex, cellIndex);
+    }
+    throw Exception("Unsupported model: " + model_);
+  }
+  
   /**
    * @brief Likelihood calculations
    */
@@ -352,7 +431,7 @@ private:
   {
     for (size_t i = 0; i < nbCategories_; ++i)
     {
-      distArray_[geneIndex][i][0] = params[0] * boost::math::ibeta_inv(params[1], params[2], ((double)i + 0.5) / (double)nbCategories_); // We use the median as category value
+      distArray_[geneIndex][i][0] = params[0] * (double)boost::math::ibeta_inv(params[1], params[2], ((double)i + 0.5) / (double)nbCategories_); // We use the median as category value
       distArray_[geneIndex][i][1] = 1. / static_cast<double>(nbCategories_);
     }
   }
@@ -363,6 +442,24 @@ private:
     {
       distArray_[geneIndex][i][0] = params[0] * (1. / params[1]) * boost::math::gamma_p_inv(params[1], ((double)i + 0.5) / (double)nbCategories_); // We use the median as category value
       distArray_[geneIndex][i][1] = 1. / static_cast<double>(nbCategories_);
+    }
+  }
+
+  unsigned int drawCountScaledBeta_(size_t geneIndex, size_t cellIndex) const {
+    if(RandomTools::flipCoin(rs_[geneIndex])) {
+      return 0;
+    } else {
+      double rate = distParamValues_[geneIndex][0] * ls_[cellIndex] * RandomTools::randBeta(distParamValues_[geneIndex][1], distParamValues_[geneIndex][2]);
+      return static_cast<unsigned int>(RandomTools::randPoisson(rate));
+    }
+  }
+
+  unsigned int drawCountGamma_(size_t geneIndex, size_t cellIndex) const {
+    if(RandomTools::flipCoin(rs_[geneIndex])) {
+      return 0;
+    } else {
+      double rate = distParamValues_[geneIndex][0] * ls_[cellIndex] * RandomTools::randGamma(distParamValues_[geneIndex][1], distParamValues_[geneIndex][1]);
+      return static_cast<unsigned int>(RandomTools::randPoisson(rate));
     }
   }
 
@@ -448,6 +545,88 @@ public:
       return -sgeModel_->computeLogLikelihoodForCell(cellId_, l_);
     }
   };
+
+
+  void optimize(
+      shared_ptr<OutputStream> profiler,
+      shared_ptr<OutputStream> messenger,
+      const std::vector<OptimizationParameters>& opt)
+  {
+    for (const auto& ppt : opt)
+    {
+      ApplicationTools::displayMessage("* " + ppt.description);
+
+      // Cell-specific parameters:
+      if (ppt.estimateNorms)
+      {
+        ApplicationTools::displayTask("  - Cell-specific parameters"); cout << endl;
+        unsigned int progress = 0;
+        for_each (std::execution::par,
+                  cellIndex_.begin(),
+                  cellIndex_.end(),
+                  [&](size_t j)
+        {
+          auto f = make_shared<CellLikelihood>(shared_from_this(), j);
+          auto optimizer = make_unique<BrentOneDimension>(f);
+          optimizer->setMessageHandler(messenger);
+          optimizer->setProfiler(profiler);
+          optimizer->setVerbose(0);
+          optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+          optimizer->setInitialInterval(0.001, 100);
+          optimizer->init(f->getParameters());
+          optimizer->getStopCondition()->setTolerance(ppt.tolerance);
+          optimizer->optimize();
+          ls_[j] = optimizer->getParameterValue("l");
+          progress++;
+          ApplicationTools::displayGauge(progress, cellIndex_.size() - 1, '=');
+        });
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("    Log likelihood is", getLogLikelihood());
+      }
+      if (ppt.outputCells != "none" && ppt.outputCells != "None")
+      {
+        ofstream streamCells(ppt.outputCells, ios::out);
+        printCellParameters(streamCells);
+        streamCells.close();
+      }
+
+      // Gene-specific parameters:
+      ApplicationTools::displayTask("  - Gene distributions"); cout << endl;
+      unsigned int progress = 0;
+      for_each (std::execution::par,
+                geneIndex_.begin(),
+                geneIndex_.end(),
+                [&](size_t i)
+      {
+        auto f = make_shared<GeneLikelihood>(shared_from_this(), i);
+        auto optimizer = make_unique<PowellMultiDimensions>(f);
+        optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
+        optimizer->setMessageHandler(messenger);
+        optimizer->setProfiler(profiler);
+        optimizer->setVerbose(0);
+        optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+        optimizer->init(f->getParameters());
+        optimizer->getStopCondition()->setTolerance(ppt.tolerance);
+        optimizer->optimize();
+        rs_[i] = optimizer->getParameterValue("r");
+        for (size_t k = 0; k < nbDistParams_; ++k)
+        {
+          distParamValues_[i][k] = optimizer->getParameterValue(distParamNames_[k]);
+        }
+        progress++;
+        ApplicationTools::displayGauge(progress, geneIndex_.size() - 1, '=');
+      });
+      ApplicationTools::displayTaskDone();
+      ApplicationTools::displayResult("    Log likelihood is", getLogLikelihood());
+ 
+      if (ppt.outputGenes != "none" && ppt.outputGenes != "None")
+      {
+        ofstream streamGenes(ppt.outputGenes, ios::out);
+        printGeneParameters(streamGenes);
+        streamGenes.close();
+      }
+    }
+  }
 };
 
 #endif // _FREE_PARAMETER_SGE_MODEL_H_

@@ -2,47 +2,56 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-DATA=MyData
+DATA=SpFirstGen
 
 //Input:
-input.file =  
+input.file = countsYPRP.csv 
 input.file.column_separator = , 
 min_nb_cells_with_obs = 10
 
 //Model:
-cell_partition.file = None
-method = 
+model = #FP, EB, etc.
+
 //Number of discrete categories to modulate the Poisson process:
-nb_categories = 4 //10
+nb_categories = 10
 
-PREFIX=$(DATA)_$(method)
+PREFIX=$(DATA)_$(model)
 
-//Optimization:
+init_param = from_counts
+
+analysis = estimate, getCI
+
+//Optimization parameters:
 message_handler = $(PREFIX)_optimization_messages.log
-profiler =  $(PREFIX)_optimization_profile.log
+profiler = $(PREFIX)_optimization_profile.log
 tolerance1 = 0.01
 tolerance2 = 0.0001
 tolerance3 = 0.000001
 
-//Output:
-output.parameters.genes1.file = $(PREFIX)_gene1_pamameters.csv //Coarse
-output.parameters.genes2.file = $(PREFIX)_gene2_pamameters.csv //Intermediate
-output.parameters.genes3.file = $(PREFIX)_gene3_pamameters.csv //Final
-output.parameters.cells2.file = $(PREFIX)_cell2_pamameters.csv //Intermediate
-output.parameters.cells3.file = $(PREFIX)_cell3_pamameters.csv //Final
-output.results.genes.file = $(PREFIX)_gene_results.csv
+output.parameters.genes1.file = $(PREFIX)_gene1_parameters.csv //Coarse
+output.parameters.genes2.file = $(PREFIX)_gene2_parameters.csv //Intermediate
+output.parameters.genes3.file = $(PREFIX)_gene3_parameters.csv //Final
+output.parameters.cells2.file = $(PREFIX)_cell2_parameters.csv //Intermediate
+output.parameters.cells3.file = $(PREFIX)_cell3_parameters.csv //Final
 
-//FP method:
+//Output:
+output.results.genes.file = $(PREFIX)_gene_results.csv
+output.results.genes_hessian.file = $(PREFIX)_gene_hessian.csv
+
+// Model-specific options
+
+//FP model:
 gene_distribution = Gamma //ScaledBeta
 
-//EB method:
+//EB model:
 nb_shape_categories = 30
 
-//FEB method:
+//FEB model:
 nb_mean_categories = 10
 output.results.mean.file = $(PREFIX)_mean_results.csv
 output.results.noise.file = $(PREFIX)_noise_results.csv
 
 //Cell partitions:
+cell_partition.file = None
 cell_partition.result.file = $(PREFIX)_partition_results.csv
 

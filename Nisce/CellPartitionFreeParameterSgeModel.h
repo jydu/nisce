@@ -14,6 +14,7 @@
 #define _CELL_PARTITION_FREE_PARAMETER_SGE_MODEL_H_
 
 #include "SgeModel.h"
+#include "Partition.h"
 
 // From the STL:
 #include <map>
@@ -21,39 +22,10 @@
 // From bpp-core:
 #include <Bpp/Numeric/AbstractParameterAliasable.h>
 
-class Partition
-{
-public:
-
-  std::map<std::string, std::vector<size_t>> partitionMap; //Partition name with corresponding cell indexes.
-
-  Partition(const std::map<std::string, std::vector<size_t>>& pMap):
-    partitionMap(pMap)
-  {}
-
-  size_t size() const
-  {
-    return partitionMap.size();
-  }
-
-  size_t getPartitionIndex(size_t cell) const
-  {
-    size_t partitionIndex = 0;
-    for (auto& p : partitionMap)
-    {
-      if (std::find(p.second.begin(), p.second.end(), cell) != p.second.end())
-      {
-        return partitionIndex;
-      }
-      partitionIndex++;
-    }
-    throw Exception("Partition::getPartitionIndex(cell): given cell is not part of the specified partition.");
-  }
-};
-
 // In this model, there is one mean and noise parameter per partition.
 class CellPartitionFreeParameterSgeModel:
-  public SgeModel
+  public SgeModel,
+  public enable_shared_from_this<CellPartitionFreeParameterSgeModel>
 {
 public:
   Partition partition_;
@@ -138,10 +110,24 @@ public:
         distParamValues_[i][2 * p + 1] = 1.;
       }
     }
-    // Library scale is 1.
-    for (size_t j  = 0; j < nbCells_; ++j)
+    // Library scale is the library size divided by the mean library size of the partition.
+    for (const auto& p : partition_.partitionMap)
     {
-      ls_[j] = 1.;
+      double meanLibSize = 0.;
+      for (auto j : p.second)
+      {
+        unsigned int libSize = 0;
+        for (size_t i  = 0; i < nbGenes_; ++i)
+        {
+	        libSize += counts_[i][j];
+        }
+        ls_[j] = static_cast<double>(libSize);
+        meanLibSize += static_cast<double>(libSize) / static_cast<double>(p.second.size());
+      }
+      for (auto j : p.second)
+      {
+        ls_[j] /= meanLibSize;
+      }
     }
   }
 
@@ -250,7 +236,7 @@ public:
 
   double getAicForGene(size_t i) const
   {
-    return 2. * static_cast<double>(nbDistParams_ + 1) - 2. * getLogLikelihoodForGene(i); // Needs to account for r too (hence the +1).
+    return 2. * static_cast<double>(partition_.size() * nbDistParams_ + 1) - 2. * getLogLikelihoodForGene(i); // Needs to account for r too (hence the +1).
   }
 
   double getMeanForGene(size_t i, size_t partitionIndex) const
@@ -396,6 +382,88 @@ public:
       return -sgeModel_->computeLogLikelihoodForCell(cellId_, l_);
     }
   };
+
+  void optimize(
+      shared_ptr<OutputStream> profiler,
+      shared_ptr<OutputStream> messenger,
+      const std::vector<OptimizationParameters>& opt)
+  {
+    for (const auto& ppt : opt)
+    {
+      ApplicationTools::displayMessage("* " + ppt.description);
+
+      // Cell-specific parameters:
+      if (ppt.estimateNorms)
+      {
+        ApplicationTools::displayTask("  - Cell-specific parameters"); cout << endl;
+        unsigned int progress = 0;
+        for_each (std::execution::par,
+                  cellIndex_.begin(),
+                  cellIndex_.end(),
+                  [&](size_t j)
+        {
+          auto f = make_shared<CellLikelihood>(shared_from_this(), j);
+          auto optimizer = make_unique<BrentOneDimension>(f);
+          optimizer->setMessageHandler(messenger);
+          optimizer->setProfiler(profiler);
+          optimizer->setVerbose(0);
+          optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+          optimizer->setInitialInterval(0.001, 100);
+          optimizer->init(f->getParameters());
+          optimizer->getStopCondition()->setTolerance(ppt.tolerance);
+          optimizer->optimize();
+          ls_[j] = optimizer->getParameterValue("l");
+          progress++;
+          ApplicationTools::displayGauge(progress, cellIndex_.size() - 1, '=');
+        });
+        ApplicationTools::displayTaskDone();
+        ApplicationTools::displayResult("    Log likelihood is", getLogLikelihood());
+      }
+      if (ppt.outputCells != "none" && ppt.outputCells != "None")
+      {
+        ofstream streamCells(ppt.outputCells, ios::out);
+        printCellParameters(streamCells);
+        streamCells.close();
+      }
+
+      // Gene-specific parameters:
+      ApplicationTools::displayTask("  - Gene distributions"); cout << endl;
+      unsigned int progress = 0;
+      for_each (std::execution::par,
+                geneIndex_.begin(),
+                geneIndex_.end(),
+                [&](size_t i)
+      {
+        auto f = make_shared<GeneLikelihood>(shared_from_this(), i);
+        auto optimizer = make_unique<PowellMultiDimensions>(f);
+        optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
+        optimizer->setMessageHandler(messenger);
+        optimizer->setProfiler(profiler);
+        optimizer->setVerbose(0);
+        optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
+        optimizer->init(f->getParameters());
+        optimizer->getStopCondition()->setTolerance(ppt.tolerance);
+        optimizer->optimize();
+        rs_[i] = optimizer->getParameterValue("r");
+        for (size_t k = 0; k < nbDistParams_; ++k)
+        {
+          distParamValues_[i][k] = optimizer->getParameterValue(distParamNames_[k]);
+        }
+        progress++;
+        ApplicationTools::displayGauge(progress, geneIndex_.size() - 1, '=');
+      });
+      ApplicationTools::displayTaskDone();
+      ApplicationTools::displayResult("    Log likelihood is", getLogLikelihood());
+ 
+      if (ppt.outputGenes != "none" && ppt.outputGenes != "None")
+      {
+        ofstream streamGenes(ppt.outputGenes, ios::out);
+        printGeneParameters(streamGenes);
+        streamGenes.close();
+      }
+    }
+  }
+
 };
 
 #endif //_CELL_PARTITION_FREE_PARAMETER_SGE_MODEL_H_

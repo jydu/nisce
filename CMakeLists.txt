@@ -2,14 +2,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.10)
 project(Nisce CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 # Compile options
-add_compile_options(-Wall -Weffc++ -Wshadow -Wconversion)
+add_compile_options(-Wall -Wshadow -Wconversion)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
@@ -39,7 +39,7 @@ find_package (bpp-core3 1.0.0 REQUIRED)
 #Find boost libraries
 #SET(Boost_USE_STATIC_LIBS ${BUILD_STATIC})
 SET(Boost_USE_MULTITHREADED ON)
-FIND_PACKAGE( Boost 1.34.0 COMPONENTS math_c99 )
+find_package( Boost CONFIG COMPONENTS math_c99 )
 
 IF(Boost_FOUND)
   INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})

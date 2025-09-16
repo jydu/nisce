@@ -1,0 +1,4 @@
+- V 0.1.0
+  * 'method' option is now 'model'
+  * new 'analysis' option that can take (a combination of) 'estimate' [default], 'getCI', 'simulate' as value. 'simulate' currently only supported for the FP model.
+
