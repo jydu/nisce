@@ -31,13 +31,59 @@ public:
 
   virtual double getLogLikelihood() const = 0;
 
+  virtual size_t getNumberOfGenes() const = 0;
+  
+  virtual size_t getNumberOfCells() const = 0;
+
+};
+
+/**
+ * @brief Basal interface for SGE models
+ */
+class SgeSimulatorInterface
+{
+public:
+  virtual ~SgeSimulatorInterface() {}
+  
+  virtual unsigned int drawCount(size_t geneIndex, size_t cellIndex) const = 0;
+  
+  virtual std::unique_ptr<vector<vector<unsigned int>>> simulateCounts() const = 0;
+
+  virtual size_t getNumberOfGenes() const = 0;
+  
+  virtual size_t getNumberOfCells() const = 0;
+
+};
+
+/**
+ * @brief Basal interface for SGE models
+ */
+class AbstractSgeSimulator:
+  public virtual SgeSimulatorInterface
+{
+public:
+  virtual ~AbstractSgeSimulator() {}
+  
+  std::unique_ptr<d2_array_ui> simulateCounts() const override
+  {
+    auto counts = std::make_unique<d2_array_ui>(getNumberOfGenes());
+    for (size_t i = 0; i < getNumberOfGenes(); ++i) {
+      (*counts)[i].resize(getNumberOfCells());
+      for (size_t j = 0; j < getNumberOfCells(); ++j) {
+	(*counts)[i][j] = drawCount(i, j);
+      }
+    }
+    return counts;
+  }
+
 };
 
 /**
  * @brief Partial implementation of an SgeModel interface where drop-out and normalization parameters are free.
  */
 class SgeModel:
-  public virtual SgeModelInterface
+  public virtual SgeModelInterface,
+  public AbstractSgeSimulator
 {
 public:
   d2_array_ui counts_;
@@ -83,6 +129,10 @@ public:
   virtual ~SgeModel() {}
 
 public:
+  
+  size_t getNumberOfGenes() const override { return nbGenes_; }
+  
+  size_t getNumberOfCells() const override { return nbCells_; }
 
   virtual double getLogLikelihood() const override
   {
@@ -101,6 +151,7 @@ public:
     return logLikelihood;
   }
 
+  unsigned int drawCount(size_t geneIndex, size_t cellIndex) const override { return 0; }
 };
 
 
@@ -164,25 +215,39 @@ public:
   virtual ~SgeModel2() {}
 
 public:
+  size_t getNumberOfGenes() const override { return nbGenes_; }
+  
+  size_t getNumberOfCells() const override { return nbCells_; }
+
   virtual double getLogLikelihood() const override
   {
-    // We use the cell likelihood, has it does not recomputes the categories and is then faster
-    d1_array_dbl logCellLikelihoods(nbCells_);
+    // As r is shared by gene, we use the gene likelihood.
+    d1_array_dbl logGeneLikelihoods(nbGenes_);
     for_each (std::execution::par,
-	      cellIndex_.begin(),
-	      cellIndex_.end(),
-	      [&](size_t j)
+	      geneIndex_.begin(),
+	      geneIndex_.end(),
+	      [&](size_t i)
     {
-      logCellLikelihoods[j] = getLogLikelihoodForCell(j);
+      logGeneLikelihoods[i] = getLogLikelihoodForGene(i);
     });
     // sort to limit underflow:
-    std::sort(logCellLikelihoods.begin(), logCellLikelihoods.end());
-    double logLikelihood = std::accumulate(logCellLikelihoods.begin(), logCellLikelihoods.end(), 0.);
+    std::sort(logGeneLikelihoods.begin(), logGeneLikelihoods.end());
+    double logLikelihood = std::accumulate(logGeneLikelihoods.begin(), logGeneLikelihoods.end(), 0.);
     return logLikelihood;
   }
 
 };
 
-
+class OptimizationParameters
+{
+public:
+  std::string description;
+  double tolerance;
+  std::string outputGenes;
+  std::string outputCells;
+  std::string outputGenesHyper;
+  bool estimateNorms;
+  bool estimateHyperParameters;
+};
 #endif //_SGE_MODEL_H_
 
