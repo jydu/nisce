@@ -34,7 +34,7 @@ if (CMAKE_INSTALL_PREFIX)
   set (CMAKE_PREFIX_PATH "${CMAKE_INSTALL_PREFIX}" ${CMAKE_PREFIX_PATH})
 endif (CMAKE_INSTALL_PREFIX)
 
-find_package (bpp-core 3.0.0 REQUIRED)
+find_package (bpp-core 6.0.0 REQUIRED)
 
 #Find boost libraries
 #SET(Boost_USE_STATIC_LIBS ${BUILD_STATIC})

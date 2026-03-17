@@ -248,6 +248,7 @@ public:
   std::string outputGenesHyper;
   bool estimateNorms;
   bool estimateHyperParameters;
+  bool aliasShape;
 };
 #endif //_SGE_MODEL_H_
 

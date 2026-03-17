@@ -435,6 +435,20 @@ public:
                 [&](size_t i)
       {
         auto f = make_shared<GeneLikelihood>(shared_from_this(), i);
+	if (ppt.aliasShape) {
+          auto pnames = f->getParameters().getParameterNames();
+          pnames.erase(remove_if(pnames.begin(),
+                                 pnames.end(),
+                                 [](const string& name) {
+                                   return(!name.ends_with("Shape"));
+                                 }),
+                       pnames.end());
+          for (auto name : pnames) {
+            if (name != pnames[0] ) {
+              f->aliasParameters(pnames[0], name);
+            }
+          }
+        }
         auto optimizer = make_unique<PowellMultiDimensions>(f);
         optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
         optimizer->setMessageHandler(messenger);

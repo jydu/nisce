@@ -787,6 +787,10 @@ int main(int argc, char* argv[])
               opt[3].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes3.file", nisce.getParams(), false, false);
               if (opt[3].outputGenes != "none" && opt[3].outputGenes != "None")
                 opt[3].outputGenes += ".part" + TextTools::toString(p + 1);
+              opt[0].aliasShape = aliasShape;
+              opt[1].aliasShape = aliasShape;
+              opt[2].aliasShape = aliasShape;
+              opt[3].aliasShape = aliasShape;
             } else {
               opt.resize(1);
               opt[0].description = "Optimization";
@@ -798,6 +802,7 @@ int main(int argc, char* argv[])
               opt[0].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes.file", nisce.getParams(), false, false);
               if (opt[0].outputGenes != "none" && opt[0].outputGenes != "None")
               opt[0].outputGenes += ".part" + TextTools::toString(p + 1);
+              opt[0].aliasShape = aliasShape;
             }
 
             sgeModel -> optimize(profiler, messenger, opt);
@@ -995,6 +1000,9 @@ int main(int argc, char* argv[])
               opt[0].estimateHyperParameters = optHyper;
               opt[1].estimateHyperParameters = optHyper;
               opt[2].estimateHyperParameters = optHyper;
+              opt[0].aliasShape = aliasShape;
+              opt[1].aliasShape = aliasShape;
+              opt[2].aliasShape = aliasShape;
             } else {
               opt.resize(1);
               opt[0].description = "Optimization";
@@ -1010,6 +1018,7 @@ int main(int argc, char* argv[])
               if (opt[0].outputGenesHyper != "none" && opt[0].outputGenesHyper != "None")
                 opt[0].outputGenesHyper += ".part" + TextTools::toString(p + 1);
               opt[0].estimateHyperParameters = optHyper;
+              opt[0].aliasShape = aliasShape;
             }
 
             sgeModel -> optimize(profiler, messenger, opt);
