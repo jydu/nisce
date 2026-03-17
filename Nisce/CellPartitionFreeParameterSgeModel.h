@@ -455,7 +455,7 @@ public:
         optimizer->setProfiler(profiler);
         optimizer->setVerbose(0);
         optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
-        optimizer->init(f->getParameters());
+        optimizer->init(f->getIndependentParameters());
         optimizer->getStopCondition()->setTolerance(ppt.tolerance);
         optimizer->optimize();
         rs_[i] = optimizer->getParameterValue("r");

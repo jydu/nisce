@@ -681,7 +681,7 @@ public:
         optimizer->setProfiler(profiler);
         optimizer->setVerbose(0);
         optimizer->setConstraintPolicy(AutoParameter::CONSTRAINTS_AUTO);
-        optimizer->init(f->getParameters());
+        optimizer->init(f->getIndependentParameters());
         optimizer->getStopCondition()->setTolerance(ppt.tolerance);
         optimizer->optimize();
         for (size_t k = 0; k < nbDistParams_; ++k)
