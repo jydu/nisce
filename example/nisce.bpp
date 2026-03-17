@@ -22,12 +22,15 @@ init_param = from_counts
 analysis = estimate, getCI
 
 //Optimization parameters:
-message_handler = $(PREFIX)_optimization_messages.log
-profiler = $(PREFIX)_optimization_profile.log
-tolerance1 = 0.01
-tolerance2 = 0.0001
-tolerance3 = 0.000001
+optimization.message_handler = $(PREFIX)_optimization_messages.log
+optimization.profiler =  $(PREFIX)_optimization_profile.log
+optimization.estimate_norms = no
+optimization.tolerance = 0.01
 
+output.parameters.genes.file = $(PREFIX)_gene_parameters.csv
+output.parameters.cells.file = $(PREFIX)_cell_parameters.csv
+
+// Only used when norms are estimted:
 output.parameters.genes1.file = $(PREFIX)_gene1_parameters.csv //Coarse
 output.parameters.genes2.file = $(PREFIX)_gene2_parameters.csv //Intermediate
 output.parameters.genes3.file = $(PREFIX)_gene3_parameters.csv //Final
@@ -42,6 +45,7 @@ output.results.genes_hessian.file = $(PREFIX)_gene_hessian.csv
 
 //FP model:
 gene_distribution = Gamma //ScaledBeta
+alias_shape = yes
 
 //EB model:
 nb_shape_categories = 30

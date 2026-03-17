@@ -614,7 +614,7 @@ public:
       if (ppt.outputGenesHyper != "none" && ppt.outputGenesHyper != "None")
       {
         ofstream streamHyperResults(ppt.outputGenesHyper, ios::out);
-	      printHyperParameters(streamHyperResults);
+       printHyperParameters(streamHyperResults);
         streamHyperResults.close();
       }
 
@@ -661,7 +661,7 @@ public:
                 [&](size_t i)
       {
         auto f = make_shared<GeneLikelihood>(shared_from_this(), i);
-	if (ppt.aliasShape) {
+        if (ppt.aliasShape) {
           auto pnames = f->getParameters().getParameterNames();
           pnames.erase(remove_if(pnames.begin(),
                                  pnames.end(),
@@ -686,7 +686,7 @@ public:
         optimizer->optimize();
         for (size_t k = 0; k < nbDistParams_; ++k)
         {
-          distParamValues_[i][k] = optimizer->getParameterValue(distParamNames_[k]);
+          distParamValues_[i][k] = f->getParameterValue(distParamNames_[k]);
         }
         progress++;
         ApplicationTools::displayGauge(progress, geneIndex_.size() - 1, '=');

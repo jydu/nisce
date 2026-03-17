@@ -119,7 +119,7 @@ public:
         unsigned int libSize = 0;
         for (size_t i  = 0; i < nbGenes_; ++i)
         {
-	        libSize += counts_[i][j];
+          libSize += counts_[i][j];
         }
         ls_[j] = static_cast<double>(libSize);
         meanLibSize += static_cast<double>(libSize) / static_cast<double>(p.second.size());
@@ -435,7 +435,7 @@ public:
                 [&](size_t i)
       {
         auto f = make_shared<GeneLikelihood>(shared_from_this(), i);
-	if (ppt.aliasShape) {
+        if (ppt.aliasShape) {
           auto pnames = f->getParameters().getParameterNames();
           pnames.erase(remove_if(pnames.begin(),
                                  pnames.end(),
@@ -461,7 +461,7 @@ public:
         rs_[i] = optimizer->getParameterValue("r");
         for (size_t k = 0; k < nbDistParams_; ++k)
         {
-          distParamValues_[i][k] = optimizer->getParameterValue(distParamNames_[k]);
+          distParamValues_[i][k] = f->getParameterValue(distParamNames_[k]);
         }
         progress++;
         ApplicationTools::displayGauge(progress, geneIndex_.size() - 1, '=');
