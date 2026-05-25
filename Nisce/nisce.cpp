@@ -42,6 +42,25 @@
 #include <limits>
 #include <execution>
 
+#include <array>
+#include <iostream>
+#include <istream>
+#include <streambuf>
+
+using namespace std;
+
+//Note: Boost is compiled using CLang on macos, which prevents its usage
+//From boost:
+//#include <boost/iostreams/device/file.hpp>
+//#include <boost/iostreams/filtering_stream.hpp>
+//#include <boost/iostreams/filter/gzip.hpp>
+//#include <boost/iostreams/filter/bzip2.hpp>
+//#include <boost/iostreams/filter/zlib.hpp>
+//using namespace boost::iostreams;
+
+//From Zlib
+#include <zlib.h>
+
 // From bpp-core:
 #include <Bpp/Numeric/Function/Functions.h>
 #include <Bpp/Numeric/Function/ThreePointsNumericalDerivative.h>
@@ -54,8 +73,6 @@
 #include <Bpp/App/BppApplication.h>
 #include <Bpp/Text/KeyvalTools.h>
 #include <Bpp/Exceptions.h>
-
-using namespace std;
 using namespace bpp;
 
 #include "ProbFunctions.h"
@@ -67,13 +84,66 @@ using namespace bpp;
 #include "CellPartitionLessFreeParameterSgeModel.h"
 
 
-d2_array_ui readCounts(istream& input, d1_array_str& geneIds, d1_array_str& cellIds, char sep = ',')
+class gzstreambuf : public std::streambuf {
+    static constexpr std::size_t buffer_size = 1 << 15;
+
+    gzFile file_;
+    std::array<char, buffer_size> buffer_;
+
+public:
+    explicit gzstreambuf(const string& filename) {
+        file_ = gzopen(filename.c_str(), "rb");
+
+        if (!file_) {
+            throw std::runtime_error("Cannot open gzip file");
+        }
+
+        setg(buffer_.data(), buffer_.data(), buffer_.data());
+    }
+
+    ~gzstreambuf() override {
+        if (file_) {
+            gzclose(file_);
+        }
+    }
+
+protected:
+    int_type underflow() override {
+        if (!file_) {
+            return traits_type::eof();
+        }
+
+        int bytes =
+            gzread(file_, buffer_.data(), buffer_size);
+
+        if (bytes <= 0) {
+            return traits_type::eof();
+        }
+
+        setg(buffer_.data(),
+             buffer_.data(),
+             buffer_.data() + bytes);
+
+        return traits_type::to_int_type(*gptr());
+    }
+};
+
+class igzstream : public std::istream {
+    gzstreambuf buffer_;
+
+public:
+    explicit igzstream(const string& filename)
+        : std::istream(&buffer_),
+          buffer_(filename) {}
+};
+
+d2_array_ui readCounts(shared_ptr<istream> input, d1_array_str& geneIds, d1_array_str& cellIds, char sep = ',')
 {
   geneIds.resize(0);
   cellIds.resize(0);
   d2_array_ui counts;
   string line;
-  getline(input, line); // Skip header
+  getline(*input, line); // Skip header
   stringstream headerStream(line);
   string value;
   getline(headerStream, value, sep); // Remove gene id col header (might just be empty).
@@ -82,7 +152,7 @@ d2_array_ui readCounts(istream& input, d1_array_str& geneIds, d1_array_str& cell
     cellIds.push_back(value);
   }
   size_t nbCells = cellIds.size();
-  while (getline(input, line))
+  while (getline(*input, line))
   {
     stringstream lineStream(line);
     d1_array_ui row;
@@ -160,77 +230,122 @@ int main(int argc, char* argv[])
     BppApplication nisce(argc, argv, "nisce");
     nisce.startTimer();
 
-    string inputPath = ApplicationTools::getAFilePath("input.file", nisce.getParams(), true, true);
-    char sep = ApplicationTools::getParameter<char>("input.file.column_separator", nisce.getParams(), ',');
-
-    ApplicationTools::displayResult("Reading counts from", inputPath);
-
-    // Read the counts:
-    ifstream inputFile(inputPath, ios::in);
+    string inputPath = ApplicationTools::getAFilePath("input.file", nisce.getParams(), false, true);
     vector<string> geneIds;
     vector<string> cellIds;
-    auto counts = readCounts(inputFile, geneIds, cellIds, sep);
-    if (counts.size() == 0)
+    d2_array_ui counts;
+    bool hasData = false;
+    char sep = ApplicationTools::getParameter<char>("input.file.column_separator", nisce.getParams(), ','); //Also used for partition tables
+    if (inputPath != "none" && inputPath != "None")
     {
-      cout << "Error, file " << argv[1] << " seems to contain no data." << endl;
-      throw exception();
-    }
-    ApplicationTools::displayTaskDone();
-    ApplicationTools::displayResult("Number of genes in file", counts.size());
-    ApplicationTools::displayResult("Number of cells in file", counts[0].size());
+      ApplicationTools::displayResult("Reading counts from", inputPath);
 
-    // Discard empty genes:
-    ApplicationTools::displayTask("Filter 'empty' genes");
-    size_t minGeneObs = ApplicationTools::getParameter<size_t>("min_nb_cells_with_obs", nisce.getParams(), 1);
-    if (minGeneObs < 1)
-      throw Exception("Minimum number of observations per gene must be at least 1.");
-    unsigned int geneCount = 0;
-    for (size_t i = counts.size(); i > 0; --i)
-    {
-      size_t s = counts[0].size() - count(counts[i - 1].begin(), counts[i - 1].end(), 0);
-      if (s < minGeneObs)
+      // Read the counts:
+      string compress = ApplicationTools::getStringParameter("input.file.compression", nisce.getParams(), "none");
+
+      //REquires BOOST:
+      //auto stream = make_shared<filtering_istream> ();
+      //if (compress == "none") {
+      //} else if (compress == "gzip") {
+      //  stream->push(gzip_decompressor());
+      //} else if (compress == "zip") {
+      //  stream->push(zlib_decompressor());
+      //} else if (compress == "bzip2") {
+      //  stream->push(bzip2_decompressor());
+      //} else
+      //  throw Exception("Bad input incompression format: " + compress);
+      //stream->push(file_source(inputPath));
+      shared_ptr<istream> stream;
+      if (compress == "none") {
+	stream = make_shared<ifstream>(inputPath);
+      } else if (compress == "gzip") {
+	stream = make_shared<igzstream>(inputPath);
+      } else
+        throw Exception("Bad input incompression format: " + compress);
+
+      counts = readCounts(stream, geneIds, cellIds, sep);
+      if (counts.size() == 0)
       {
-        // cout << "Gene " << i << " has " << s << " counts only and was discarded." << endl;
-        counts.erase(counts.begin() + static_cast<ptrdiff_t>(i) - 1, counts.begin() + static_cast<ptrdiff_t>(i));
-        geneIds.erase(geneIds.begin() + static_cast<ptrdiff_t>(i) - 1, geneIds.begin() + static_cast<ptrdiff_t>(i));
-        geneCount++;
+        cout << "Error, file " << argv[1] << " seems to contain no data." << endl;
+        throw exception();
       }
-    }
-    ApplicationTools::displayTaskDone();
-    ApplicationTools::displayResult("Number of discarded genes", geneCount);
+      ApplicationTools::displayTaskDone();
+      ApplicationTools::displayResult("Number of genes in file", counts.size());
+      ApplicationTools::displayResult("Number of cells in file", counts[0].size());
 
-    // Discard empty cells:
-    ApplicationTools::displayTask("Filter 'empty' cells");
-    vector<ptrdiff_t> cellsToDiscard;
-    for (size_t j = 0; j < counts[0].size(); ++j)
-    {
-      size_t i;
-      for (i = 0; i < counts.size() && counts[i][j] == 0; ++i)
-      {}
-      if (i == counts.size())
-        cellsToDiscard.push_back(static_cast<ptrdiff_t>(j));
-    }
-    for (auto& v : counts)
-    {
+      // Discard empty genes:
+      ApplicationTools::displayTask("Filter 'empty' genes");
+      size_t minGeneObs = ApplicationTools::getParameter<size_t>("min_nb_cells_with_obs", nisce.getParams(), 1);
+      if (minGeneObs < 1)
+        throw Exception("Minimum number of observations per gene must be at least 1.");
+      unsigned int geneCount = 0;
+      for (size_t i = counts.size(); i > 0; --i)
+      {
+        size_t s = counts[0].size() - count(counts[i - 1].begin(), counts[i - 1].end(), 0);
+        if (s < minGeneObs)
+        {
+          // cout << "Gene " << i << " has " << s << " counts only and was discarded." << endl;
+          counts.erase(counts.begin() + static_cast<ptrdiff_t>(i) - 1, counts.begin() + static_cast<ptrdiff_t>(i));
+          geneIds.erase(geneIds.begin() + static_cast<ptrdiff_t>(i) - 1, geneIds.begin() + static_cast<ptrdiff_t>(i));
+          geneCount++;
+        }
+      }
+      ApplicationTools::displayTaskDone();
+      ApplicationTools::displayResult("Number of discarded genes", geneCount);
+
+      // Discard empty cells:
+      ApplicationTools::displayTask("Filter 'empty' cells");
+      vector<ptrdiff_t> cellsToDiscard;
+      for (size_t j = 0; j < counts[0].size(); ++j)
+      {
+        size_t i;
+        for (i = 0; i < counts.size() && counts[i][j] == 0; ++i)
+        {}
+        if (i == counts.size())
+          cellsToDiscard.push_back(static_cast<ptrdiff_t>(j));
+      }
+      for (auto& v : counts)
+      {
+        for (auto it = cellsToDiscard.rbegin(); it != cellsToDiscard.rend(); ++it)
+        {
+          v.erase(v.begin() + *it, v.begin() + *it + 1);
+        }
+      }
       for (auto it = cellsToDiscard.rbegin(); it != cellsToDiscard.rend(); ++it)
       {
-        v.erase(v.begin() + *it, v.begin() + *it + 1);
+        cellIds.erase(cellIds.begin() + *it, cellIds.begin() + *it + 1);
       }
-    }
-    for (auto it = cellsToDiscard.rbegin(); it != cellsToDiscard.rend(); ++it)
-    {
-      cellIds.erase(cellIds.begin() + *it, cellIds.begin() + *it + 1);
-    }
-    ApplicationTools::displayTaskDone();
-    ApplicationTools::displayResult("Number of discarded cells", cellsToDiscard.size());
+      ApplicationTools::displayTaskDone();
+      ApplicationTools::displayResult("Number of discarded cells", cellsToDiscard.size());
 
-    string outputSelectedCounts = ApplicationTools::getAFilePath("output.selected_counts.file", nisce.getParams(), false, false);
-    if (outputSelectedCounts != "none" && outputSelectedCounts != "None")
+      string outputSelectedCounts = ApplicationTools::getAFilePath("output.selected_counts.file", nisce.getParams(), false, false);
+      if (outputSelectedCounts != "none" && outputSelectedCounts != "None")
+      {
+        ApplicationTools::displayResult("Output filtered counts to", outputSelectedCounts);
+        ofstream outputCounts(outputSelectedCounts, ios::out);
+        writeCounts(counts, outputCounts, geneIds, cellIds, sep);
+        outputCounts.close();
+      }
+
+      hasData = true;
+    }
+    else
     {
-      ApplicationTools::displayResult("Output filtered counts to", outputSelectedCounts);
-      ofstream outputCounts(outputSelectedCounts, ios::out);
-      writeCounts(counts, outputCounts, geneIds, cellIds, sep);
-      outputCounts.close();
+      //If no input file is specified, only simulations can be performed. We create a dummy dataset:
+      size_t nbGenes = ApplicationTools::getParameter<size_t>("input.simulation.number_of_genes", nisce.getParams(), 5000);
+      size_t nbCells = ApplicationTools::getParameter<size_t>("input.simulation.number_of_cells", nisce.getParams(), 5000);
+      geneIds.resize(nbGenes);
+      cellIds.resize(nbCells);
+      for (size_t i = 0; i < nbCells; ++i) {
+        cellIds[i] = "c" + TextTools::toString(i + 1);
+      }
+      for (size_t i = 0; i < nbGenes; ++i) {
+        geneIds[i] = "g" + TextTools::toString(i + 1);
+	counts.push_back(d1_array_ui(nbCells, 0));
+      }
+      ApplicationTools::displayMessage("Simulating data with");
+      ApplicationTools::displayResult(" - Number of genes", nbGenes);
+      ApplicationTools::displayResult(" - Number of cells", nbCells);
     }
     
     // Select model:
@@ -286,6 +401,9 @@ int main(int argc, char* argv[])
 
         if (VectorTools::contains(analysis, "estimate"))
         {
+	  if (! hasData) {
+            throw Exception("ERROR: an input data file should be provided to estimate parameters.");
+	  }
           string prPath = ApplicationTools::getAFilePath("optimization.profiler", nisce.getParams(), false, false);
           string mhPath = ApplicationTools::getAFilePath("optimization.message_handler", nisce.getParams(), false, false);
 
@@ -319,8 +437,11 @@ int main(int argc, char* argv[])
             opt[3].description = "Final optimization";
             opt[0].tolerance = 1.0;
             opt[1].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance1", nisce.getParams(), 0.01);
+	    if (opt[1].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[2].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance2", nisce.getParams(), 0.01);
+	    if (opt[2].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[3].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance3", nisce.getParams(), 0.01);
+	    if (opt[3].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[0].estimateNorms = false;
             opt[1].estimateNorms = optNorm;
             opt[2].estimateNorms = optNorm;
@@ -337,6 +458,7 @@ int main(int argc, char* argv[])
             opt.resize(1);
             opt[0].description = "Optimization";
             opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance", nisce.getParams(), 0.01);
+	    if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[0].estimateNorms = optNorm;
             opt[0].outputCells = ApplicationTools::getAFilePath("output.parameters.cells.file", nisce.getParams(), false, false);
             opt[0].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes.file", nisce.getParams(), false, false);
@@ -494,6 +616,9 @@ int main(int argc, char* argv[])
 
         if (VectorTools::contains(analysis, "estimate"))
         { 
+	  if (! hasData) {
+            throw Exception("ERROR: an input data file should be provided to estimate parameters.");
+	  }
           string prPath = ApplicationTools::getAFilePath("optimization.profiler", nisce.getParams(), false, false);
           string mhPath = ApplicationTools::getAFilePath("optimization.message_handler", nisce.getParams(), false, false);
 
@@ -527,8 +652,11 @@ int main(int argc, char* argv[])
             opt[1].description = "Refining optimization";
             opt[2].description = "Final optimization";
             opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance1", nisce.getParams(), 0.01);
+	    if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[1].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance2", nisce.getParams(), 0.01);
+	    if (opt[1].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[2].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance3", nisce.getParams(), 0.01);
+	    if (opt[2].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[0].estimateNorms = optNorm;
             opt[1].estimateNorms = optNorm;
             opt[2].estimateNorms = optNorm;
@@ -548,6 +676,7 @@ int main(int argc, char* argv[])
             opt.resize(1);
             opt[0].description = "Optimization";
             opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance", nisce.getParams(), 0.01);
+	    if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[0].estimateNorms = optNorm;
             opt[0].outputCells = ApplicationTools::getAFilePath("output.parameters.cells.file", nisce.getParams(), false, false);
             opt[0].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes.file", nisce.getParams(), false, false);
@@ -749,6 +878,9 @@ int main(int argc, char* argv[])
         
           if (VectorTools::contains(analysis, "estimate"))
           { 
+	    if (! hasData) {
+              throw Exception("ERROR: an input data file should be provided to estimate parameters.");
+	    }
             vector<OptimizationParameters> opt;
             bool optNorm = ApplicationTools::getBooleanParameter("optimization.estimate_norms", nisce.getParams(), true);
             ApplicationTools::displayBooleanResult("Estimate cell norms", optNorm);
@@ -761,8 +893,11 @@ int main(int argc, char* argv[])
               opt[3].description = "Final optimization";
               opt[0].tolerance = 1.0;
               opt[1].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance1", nisce.getParams(), 0.01);
+	      if (opt[1].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[2].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance2", nisce.getParams(), 0.01);
+	      if (opt[2].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[3].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance3", nisce.getParams(), 0.01);
+	      if (opt[3].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[0].estimateNorms = false;
               opt[1].estimateNorms = optNorm;
               opt[2].estimateNorms = optNorm;
@@ -795,6 +930,7 @@ int main(int argc, char* argv[])
               opt.resize(1);
               opt[0].description = "Optimization";
               opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance", nisce.getParams(), 0.01);
+	      if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[0].estimateNorms = optNorm;
               opt[0].outputCells = ApplicationTools::getAFilePath("output.parameters.cells.file", nisce.getParams(), false, false);
               if (opt[0].outputCells != "none" && opt[0].outputCells != "None")
@@ -953,6 +1089,9 @@ int main(int argc, char* argv[])
 
           if (VectorTools::contains(analysis, "estimate"))
           { 
+	    if (! hasData) {
+              throw Exception("ERROR: an input data file should be provided to estimate parameters.");
+	    }
             vector<OptimizationParameters> opt;
             bool optNorm = ApplicationTools::getBooleanParameter("optimization.estimate_norms", nisce.getParams(), true);
             bool optHyper = ApplicationTools::getBooleanParameter("optimization.dropout_prior.estimate_hyper_parameters", nisce.getParams(), true);
@@ -965,8 +1104,11 @@ int main(int argc, char* argv[])
               opt[1].description = "Refining optimization";
               opt[2].description = "Final optimization";
               opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance1", nisce.getParams(), 0.01);
+	      if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[1].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance2", nisce.getParams(), 0.01);
+	      if (opt[1].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[2].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance3", nisce.getParams(), 0.01);
+	      if (opt[2].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[0].estimateNorms = optNorm;
               opt[1].estimateNorms = optNorm;
               opt[2].estimateNorms = optNorm;
@@ -1007,6 +1149,7 @@ int main(int argc, char* argv[])
               opt.resize(1);
               opt[0].description = "Optimization";
               opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance", nisce.getParams(), 0.01);
+	      if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[0].estimateNorms = optNorm;
               opt[0].outputCells = ApplicationTools::getAFilePath("output.parameters.cells.file", nisce.getParams(), false, false);
               if (opt[0].outputCells != "none" && opt[0].outputCells != "None")

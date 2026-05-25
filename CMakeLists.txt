@@ -3,6 +3,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.10)
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+endif()
+
 project(Nisce CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -37,9 +41,13 @@ endif (CMAKE_INSTALL_PREFIX)
 find_package (bpp-core 6.0.0 REQUIRED)
 
 #Find boost libraries
-#SET(Boost_USE_STATIC_LIBS ${BUILD_STATIC})
+SET(Boost_USE_STATIC_LIBS ${BUILD_STATIC})
 SET(Boost_USE_MULTITHREADED ON)
 find_package( Boost CONFIG COMPONENTS math_c99 )
+
+#iostream does not work on macos because it is compiled by CLang. We use zlib directly
+#find_package(Boost 1.34.0 COMPONENTS iostreams)
+find_package(ZLIB REQUIRED)
 
 IF(Boost_FOUND)
   INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
