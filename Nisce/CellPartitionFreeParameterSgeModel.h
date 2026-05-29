@@ -36,6 +36,7 @@ public:
   std::vector<std::shared_ptr<ConstraintInterface>> distParamConstraints_;
   d2_array_dbl distParamValues_;
   d4_array_dbl distArray_;    // Intermediate calculations. Contains, for each gene, each partition elt, each category, two numbers: value and probability.
+  bool shapeIsAliased_;       // Record whether shapes have been aliased during optimization to get the number of parameters right.
 
 public:
   CellPartitionFreeParameterSgeModel(
@@ -50,7 +51,8 @@ public:
     distParamNames_(), // Will be initialized in the constructor body
     distParamConstraints_(), // Will be initialized in the constructor body
     distParamValues_(nbGenes_),
-    distArray_(nbGenes_)
+    distArray_(nbGenes_),
+    shapeIsAliased_(false)
   {
     for (auto& p : partition_.partitionMap) {
       distParamNames_.push_back(p.first + ".Mean");
@@ -228,15 +230,28 @@ public:
 
   unsigned int getNumberOfParameters() const override
   {
-    return static_cast<unsigned int>(nbCells_ + nbGenes_ * (partition_.size() * nbDistParams_ + 1));
-    //                                | l                                       |               |
-    //                                                                          | Mean and shape|
-    //                                                                                          | r
+    if(shapeIsAliased_) {
+      return static_cast<unsigned int>(nbCells_ + nbGenes_ * (partition_.size() * (nbDistParams_ - 1) + 2));
+      //                                | l                                       |                 |   |
+      //                                                                          |      mean       |   |
+      //                                                                                                | r and shape
+      //
+    
+    } else {
+      return static_cast<unsigned int>(nbCells_ + nbGenes_ * (partition_.size() * nbDistParams_ + 1));
+      //                                | l                                      |              | |
+      //                                                                         |mean and shape| |
+      //                                                                                          |r
+    }                                                                              
   }
 
   double getAicForGene(size_t i) const
   {
-    return 2. * static_cast<double>(partition_.size() * nbDistParams_ + 1) - 2. * getLogLikelihoodForGene(i); // Needs to account for r too (hence the +1).
+    if(shapeIsAliased_) {
+      return 2. * static_cast<double>(partition_.size() * (nbDistParams_ - 1) + 2) - 2. * getLogLikelihoodForGene(i); // Needs to account for r and shared shape (hence the +2).
+    } else {
+      return 2. * static_cast<double>(partition_.size() * nbDistParams_ + 1) - 2. * getLogLikelihoodForGene(i); // Needs to account for r too (hence the +1).
+    }
   }
 
   double getMeanForGene(size_t i, size_t partitionIndex) const
@@ -436,6 +451,7 @@ public:
       {
         auto f = make_shared<GeneLikelihood>(shared_from_this(), i);
         if (ppt.aliasShape) {
+          shapeIsAliased_ = true;
           auto pnames = f->getParameters().getParameterNames();
           pnames.erase(remove_if(pnames.begin(),
                                  pnames.end(),
@@ -448,6 +464,8 @@ public:
               f->aliasParameters(pnames[0], name);
             }
           }
+        } else {
+          shapeIsAliased_ = true;
         }
         auto optimizer = make_unique<PowellMultiDimensions>(f);
         optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));

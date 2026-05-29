@@ -9,7 +9,7 @@
  *
  *    Description:  Noise Inference from Single Cell Expression
  *
- *        Version:  0.99.0
+ *        Version:  0.999.0
  *        Created:  20.04.2023 10:39:22
  *       Revision:  none
  *       Compiler:  gcc
@@ -213,9 +213,9 @@ void help()
 int main(int argc, char* argv[])
 {
   cout << "******************************************************************" << endl;
-  cout << "*                  N.I.S.C.E., version 0.99.0                    *" << endl;
+  cout << "*                  N.I.S.C.E., version 0.999.0                   *" << endl;
   cout << "* Author: J. Dutheil                        Created on  24/04/23 *" << endl;
-  cout << "*                                           Last Modif. 30/07/25 *" << endl;
+  cout << "*                                           Last Modif. 28/05/26 *" << endl;
   cout << "******************************************************************" << endl;
   cout << endl;
 
@@ -797,9 +797,6 @@ int main(int argc, char* argv[])
 
       bool aliasShape = ApplicationTools::getBooleanParameter("alias_shape", nisce.getParams(), false);
       ApplicationTools::displayBooleanResult("Single shape parameter", aliasShape);
-      if (aliasShape) {
-        ApplicationTools::displayWarning("Shape parameters are aliased, degrees of freedom and AIC values will be incorrect in output files.");
-      }
       
       string partitionResultFile = ApplicationTools::getStringParameter("cell_partition.result.file", nisce.getParams(), "None");
 
