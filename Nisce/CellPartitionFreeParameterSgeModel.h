@@ -228,30 +228,31 @@ public:
     return const_cast<CellPartitionFreeParameterSgeModel*>(this)->computeLogLikelihoodForCell(j, ls_[j]); // Actually ok to do so here, since we are not modifying the object.
   }
 
+  unsigned int getNumberOfParametersForGene(size_t i) const override
+  {
+    //Note: all genes have the same number of parameters
+    unsigned int np = 0;
+    if(shapeIsAliased_) {
+      np = static_cast<unsigned int>((nbDistParams_ - partition_.size()) + 2);
+      //                             |      mean only                  |   |
+      //                                                                   | r and shape
+      //
+    } else {
+      np =  static_cast<unsigned int>(nbDistParams_ + 1);
+      //                            |mean and shape| |
+      //                                             |r
+    }
+    return np;    
+  }
+
   unsigned int getNumberOfParameters() const override
   {
-    if(shapeIsAliased_) {
-      return static_cast<unsigned int>(nbCells_ + nbGenes_ * (partition_.size() * (nbDistParams_ - 1) + 2));
-      //                                | l                                       |                 |   |
-      //                                                                          |      mean       |   |
-      //                                                                                                | r and shape
-      //
-    
-    } else {
-      return static_cast<unsigned int>(nbCells_ + nbGenes_ * (partition_.size() * nbDistParams_ + 1));
-      //                                | l                                      |              | |
-      //                                                                         |mean and shape| |
-      //                                                                                          |r
-    }                                                                              
+    return static_cast<unsigned int>(nbCells_ + nbGenes_ * getNumberOfParametersForGene(0));
   }
 
   double getAicForGene(size_t i) const
   {
-    if(shapeIsAliased_) {
-      return 2. * static_cast<double>(partition_.size() * (nbDistParams_ - 1) + 2) - 2. * getLogLikelihoodForGene(i); // Needs to account for r and shared shape (hence the +2).
-    } else {
-      return 2. * static_cast<double>(partition_.size() * nbDistParams_ + 1) - 2. * getLogLikelihoodForGene(i); // Needs to account for r too (hence the +1).
-    }
+    return 2. * getNumberOfParametersForGene(i) - 2. * getLogLikelihoodForGene(i);
   }
 
   double getMeanForGene(size_t i, size_t partitionIndex) const
@@ -281,7 +282,7 @@ public:
       {
         out << "," << p;
       }
-      out << "," << getLogLikelihoodForGene(i) << "," << static_cast<double>(nbDistParams_ + 1) << "," << getAicForGene(i) << endl;
+      out << "," << getLogLikelihoodForGene(i) << "," << getNumberOfParametersForGene(i) << "," << getAicForGene(i) << endl;
     }
   }
 

@@ -39,6 +39,7 @@ public:
   std::vector<std::shared_ptr<ConstraintInterface>> distParamConstraints_;
   d2_array_dbl distParamValues_;
   d4_array_dbl distArray_;    // Intermediate calculations. Contains, for each gene, each partition elt, each category, two numbers: value and probability.
+  bool shapeIsAliased_;       // Record whether shapes have been aliased during optimization to get the number of parameters right.
   std::string prior_;
 
 public:
@@ -57,6 +58,7 @@ public:
     distParamConstraints_(), // Will be initialized in the constructor body
     distParamValues_(nbGenes_),
     distArray_(nbGenes_),
+    shapeIsAliased_(false),
     prior_(prior)
   {
     for (auto& p : partition_.partitionMap) {
@@ -282,14 +284,30 @@ public:
     return const_cast<CellPartitionLessFreeParameterSgeModel*>(this)->computeLogLikelihoodForCell(j, ls_[j]); // Actually ok to do so here, since we are not modifying the object.
   }
 
+  unsigned int getNumberOfParametersForGene(size_t i) const override
+  {
+    //Note: all genes have the same number of parameters
+    unsigned int np = 0;
+    if(shapeIsAliased_) {
+      np = static_cast<unsigned int>((nbDistParams_ - partition_.size()) + 1);
+      //                             |      mean only                  |   |
+      //                                                                   | shape
+      //
+    } else {
+      np = static_cast<unsigned int>(nbDistParams_);
+      //                            |mean and shape|
+    }
+    return np;    
+  }
+
   unsigned int getNumberOfParameters() const override
   {
-    return static_cast<unsigned int>((prior_ == "Beta" ? 2 : 0) + nbCells_ + nbGenes_ * partition_.size() * nbDistParams_);
+    return static_cast<unsigned int>((prior_ == "Beta" ? 2 : 0) + nbCells_ + nbGenes_ * getNumberOfParametersForGene(0));
   }
 
   double getAicForGene(size_t i) const
   {
-    return 2. * static_cast<double>(partition_.size() * nbDistParams_) - 2. * getLogLikelihoodForGene(i); // Needs to account for r too (hence the +1).
+    return 2. * getNumberOfParametersForGene(i) - 2. * getLogLikelihoodForGene(i);
   }
 
   double getMeanForGene(size_t i, size_t partitionIndex) const
@@ -319,7 +337,7 @@ public:
       {
         out << "," << p;
       }
-      out << "," << getLogLikelihoodForGene(i) << "," << static_cast<double>(nbDistParams_ + 1) << "," << getAicForGene(i) << endl;
+      out << "," << getLogLikelihoodForGene(i) << "," << getNumberOfParametersForGene(i) << "," << getAicForGene(i) << endl;
     }
   }
 
@@ -662,6 +680,7 @@ public:
       {
         auto f = make_shared<GeneLikelihood>(shared_from_this(), i);
         if (ppt.aliasShape) {
+          shapeIsAliased_ = true;
           auto pnames = f->getParameters().getParameterNames();
           pnames.erase(remove_if(pnames.begin(),
                                  pnames.end(),

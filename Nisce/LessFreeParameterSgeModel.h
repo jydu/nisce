@@ -329,6 +329,11 @@ public:
     return const_cast<LessFreeParameterSgeModel*>(this)->computeLogLikelihoodForCell(j, ls_[j]); // Actually ok to do so here, since we are not modifying the object.
   }
 
+  unsigned int getNumberOfParametersForGene(size_t i) const override
+  {
+    return static_cast<unsigned int>(nbDistParams_ + 1);
+  }
+  
   unsigned int getNumberOfParameters() const override
   {
     return static_cast<unsigned int>((prior_ == "Beta" ? 2 : 0) + nbCells_ + nbGenes_ * (nbDistParams_ + 1));

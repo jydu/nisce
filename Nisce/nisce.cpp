@@ -541,7 +541,7 @@ int main(int argc, char* argv[])
           ApplicationTools::displayResult("Number of replicates", nbSim);
           ApplicationTools::displayTask("Simulating...");
           for (unsigned int k = 0; k < nbSim; ++k) {
-            char path[300]; sprintf(path, outputSimPath.c_str(), k);
+            char path[300]; snprintf(path, 300, outputSimPath.c_str(), k);
             ApplicationTools::displayGauge(k, nbSim - 1, '=');
             auto simCounts = sgeModel->simulateCounts();
             //Write to file:

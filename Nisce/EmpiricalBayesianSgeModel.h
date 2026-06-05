@@ -252,6 +252,11 @@ public:
     return logLikelihood;
   }
 
+  unsigned int getNumberOfParametersForGene(size_t i) const override
+  {
+    return 2;
+  }
+
   unsigned int getNumberOfParameters() const override
   {
     return static_cast<unsigned int>(nbCells_ + nbGenes_ * 2 + 2); //1 l per cell, 1 r and 1 mean per gene, 2 hyper parameters for noise.

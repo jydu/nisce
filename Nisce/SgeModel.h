@@ -23,6 +23,8 @@ class SgeModelInterface
 public:
   virtual ~SgeModelInterface() {}
   
+  virtual unsigned int getNumberOfParametersForGene(size_t i) const = 0;
+  
   virtual unsigned int getNumberOfParameters() const = 0;
 
   virtual double getLogLikelihoodForGene(size_t i) const = 0;
