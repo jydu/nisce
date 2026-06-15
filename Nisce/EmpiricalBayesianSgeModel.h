@@ -41,7 +41,7 @@ public:
       const d1_array_str& cellIds,
       size_t nbShapeCategories,
       size_t nbCategories) :
-    SgeModel(counts, geneIds, cellIds, nbCategories),
+    SgeModel(counts, geneIds, cellIds, nbCategories, true),
     nbShapeCategories_(nbShapeCategories),
     meanShape_(1.),
     shapeShape_(1.),

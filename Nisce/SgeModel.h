@@ -97,6 +97,7 @@ public:
 
   d1_array_dbl rs_;           // Dropout parameters
   d1_array_dbl ls_;           // Library size parameters
+  bool withDropout_;
 
   vector<size_t> geneIndex_;
   vector<size_t> cellIndex_;
@@ -106,7 +107,8 @@ public:
     const d2_array_ui& counts,
     const d1_array_str& geneIds,
     const d1_array_str& cellIds,
-    size_t nbCategories) :
+    size_t nbCategories,
+    bool withDropout) :
     counts_(counts),
     geneIds_(geneIds),
     cellIds_(cellIds),
@@ -115,6 +117,7 @@ public:
     nbCategories_(nbCategories),
     rs_(nbGenes_),
     ls_(nbCells_),
+    withDropout_(withDropout),
     geneIndex_(),
     cellIndex_()
   {

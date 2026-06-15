@@ -44,8 +44,9 @@ public:
       const d1_array_str& geneIds,
       const d1_array_str& cellIds,
       const Partition& partition,
-      size_t nbCategories) :
-    SgeModel(counts, geneIds, cellIds, nbCategories),
+      size_t nbCategories,
+      bool withDropout) :
+    SgeModel(counts, geneIds, cellIds, nbCategories, withDropout),
     partition_(partition),
     nbDistParams_(2 * partition.size()),
     distParamNames_(), // Will be initialized in the constructor body
@@ -105,7 +106,11 @@ public:
       if (c == 0) c = 1;
       if (c == nbCells_) c = nbCells_ - 1;
       double s = accumulate(counts_[i].begin(), counts_[i].end(), 0.);
-      rs_[i] = static_cast<double>(c) / static_cast<double>(nbCells_);
+      if (withDropout_) {
+        rs_[i] = static_cast<double>(c) / static_cast<double>(nbCells_);
+      } else {
+        rs_[i] = 0;
+      }
       for (size_t p = 0; p < partition_.size(); ++p)
       {
         distParamValues_[i][2 * p] = s / static_cast<double>(nbCells_ - c);
@@ -143,6 +148,11 @@ public:
     out << " Model has " << partition_.size() << " cell groups." << endl;
     out << " Poisson distribution is modulated by a Gamma distribution," << endl;
     out << "     with " << nbCategories_ << " categories." << endl;
+    if (withDropout_) {
+      out << " Distribution is zero-inflated." << endl;
+    } else {
+      out << " Distribution is not zero-inflated." << endl;
+    }
     out << "-----------------------------------------------------------------" << endl;
   }
 
@@ -233,14 +243,16 @@ public:
     //Note: all genes have the same number of parameters
     unsigned int np = 0;
     if(shapeIsAliased_) {
-      np = static_cast<unsigned int>((nbDistParams_ - partition_.size()) + 2);
+      np = static_cast<unsigned int>((nbDistParams_ - partition_.size()) + 1);
       //                             |      mean only                  |   |
-      //                                                                   | r and shape
+      //                                                                   | shape
       //
     } else {
-      np =  static_cast<unsigned int>(nbDistParams_ + 1);
-      //                            |mean and shape| |
-      //                                             |r
+      np =  static_cast<unsigned int>(nbDistParams_);
+      //                            |mean and shape|
+    }
+    if (withDropout_) {
+      np++;
     }
     return np;    
   }
@@ -335,7 +347,9 @@ public:
       r_(0),
       distParams_(sgeModel->nbDistParams_)
     {
-      addParameter_(new Parameter("r", sgeModel->rs_[geneId], Parameter::PROP_CONSTRAINT_EX));
+      if (sgeModel->withDropout_) {
+        addParameter_(new Parameter("r", sgeModel->rs_[geneId], Parameter::PROP_CONSTRAINT_EX));
+      }
       for (size_t i = 0; i < sgeModel->nbDistParams_; ++i)
       {
         addParameter_(new Parameter(
@@ -352,7 +366,9 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      r_ = parameter("r").getValue();
+      if (sgeModel_->withDropout_) {
+        r_ = parameter("r").getValue();
+      }
       for (size_t j = 0; j < sgeModel_->nbDistParams_; ++j)
       {
         distParams_[j] = parameter(sgeModel_->distParamNames_[j]).getValue();
@@ -477,7 +493,9 @@ public:
         optimizer->init(f->getIndependentParameters());
         optimizer->getStopCondition()->setTolerance(ppt.tolerance);
         optimizer->optimize();
-        rs_[i] = optimizer->getParameterValue("r");
+        if (withDropout_) {
+          rs_[i] = optimizer->getParameterValue("r");
+        }
         for (size_t k = 0; k < nbDistParams_; ++k)
         {
           distParamValues_[i][k] = f->getParameterValue(distParamNames_[k]);

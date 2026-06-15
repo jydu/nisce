@@ -37,8 +37,9 @@ public:
       const d1_array_str& geneIds,
       const d1_array_str& cellIds,
       const string& model,
-      size_t nbCategories) :
-    SgeModel(counts, geneIds, cellIds, nbCategories),
+      size_t nbCategories,
+      bool withDropout) :
+    SgeModel(counts, geneIds, cellIds, nbCategories, withDropout),
     model_(model),
     nbDistParams_(0),  // Will be initialized in the constructor body
     distParamNames_(), // Will be initialized in the constructor body
@@ -121,7 +122,11 @@ public:
       if (c == 0) c = 1;
       if (c == nbCells_) c = nbCells_ - 1;
       double s = accumulate(counts_[i].begin(), counts_[i].end(), 0.);
-      rs_[i] = static_cast<double>(c) / static_cast<double>(nbCells_);
+      if (withDropout_) {
+        rs_[i] = static_cast<double>(c) / static_cast<double>(nbCells_);
+      } else {
+        rs_[i] = 0;
+      }
       distParamValues_[i][0] = min(s / static_cast<double>(nbCells_ - c), 999.);
       for (size_t j = 1; j < nbDistParams_; ++j)
       {
@@ -205,6 +210,11 @@ public:
     out << " SGE model with " << nbGenes_ << " genes and " << nbCells_ << " cells." << endl;
     out << " Poisson distribution is modulated by a " << model_ << " distribution," << endl;
     out << "     with " << nbCategories_ << " categories." << endl;
+    if (withDropout_) {
+      out << " Distribution is zero-inflated." << endl;
+    } else {
+      out << " Distribution is not zero-inflated." << endl;
+    }
     out << "-----------------------------------------------------------------" << endl;
   }
 
@@ -349,12 +359,12 @@ public:
 
   unsigned int getNumberOfParametersForGene(size_t i) const override
   {
-    return static_cast<unsigned int>(nbDistParams_ + 1);
+    return static_cast<unsigned int>(nbDistParams_ + (withDropout_ ? 1 : 0));
   }
   
   unsigned int getNumberOfParameters() const override
   {
-    return static_cast<unsigned int>(nbCells_ + nbGenes_ * (nbDistParams_ + 1));
+    return static_cast<unsigned int>(nbCells_ + nbGenes_ * getNumberOfParametersForGene(0));
   }
 
   double getAicForGene(size_t i) const
@@ -487,7 +497,9 @@ public:
       r_(0),
       distParams_(sgeModel->nbDistParams_)
     {
-      addParameter_(new Parameter("r", sgeModel->rs_[geneId], Parameter::PROP_CONSTRAINT_EX));
+      if (sgeModel->withDropout_) {
+        addParameter_(new Parameter("r", sgeModel->rs_[geneId], Parameter::PROP_CONSTRAINT_EX));
+      }
       for (size_t i = 0; i < sgeModel->nbDistParams_; ++i)
       {
         addParameter_(new Parameter(
@@ -613,7 +625,9 @@ public:
         optimizer->init(f->getParameters());
         optimizer->getStopCondition()->setTolerance(ppt.tolerance);
         optimizer->optimize();
-        rs_[i] = optimizer->getParameterValue("r");
+	if (withDropout_) {
+          rs_[i] = optimizer->getParameterValue("r");
+	}
         for (size_t k = 0; k < nbDistParams_; ++k)
         {
           distParamValues_[i][k] = optimizer->getParameterValue(distParamNames_[k]);

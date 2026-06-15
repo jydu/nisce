@@ -46,7 +46,7 @@ public:
       size_t nbMeanCategories,
       size_t nbShapeCategories,
       size_t nbCategories) :
-    SgeModel(counts, geneIds, cellIds, nbCategories),
+    SgeModel(counts, geneIds, cellIds, nbCategories, true),
     nbMeanCategories_(nbMeanCategories),
     nbShapeCategories_(nbShapeCategories),
     meanMean_(1.),

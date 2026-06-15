@@ -351,6 +351,7 @@ int main(int argc, char* argv[])
     // Select model:
     string partitionFile = ApplicationTools::getAFilePath("cell_partition.file", nisce.getParams(), false, true);
     string model = ApplicationTools::getStringParameter("model", nisce.getParams(), "FP");
+    bool withDropout = ApplicationTools::getBooleanParameter("with_dropout", nisce.getParams(), true);
 
     auto analysis = ApplicationTools::getVectorParameter<string>("analysis", nisce.getParams(), ',', "estimate");
     
@@ -375,7 +376,7 @@ int main(int argc, char* argv[])
         size_t nbCategories = ApplicationTools::getParameter<size_t>("nb_categories", nisce.getParams(), 5);
 
         // Create the data structure:
-        auto sgeModel = make_shared<FreeParameterSgeModel>(counts, geneIds, cellIds, distribution, nbCategories);
+        auto sgeModel = make_shared<FreeParameterSgeModel>(counts, geneIds, cellIds, distribution, nbCategories, withDropout);
         sgeModel->print(cout);
         
         // Init parameter values:
@@ -848,7 +849,7 @@ int main(int argc, char* argv[])
           // ***********************************************************
           
           // Create the data structure:
-          auto sgeModel = make_shared<CellPartitionFreeParameterSgeModel>(counts, geneIds, cellIds, partition, nbCategories);
+          auto sgeModel = make_shared<CellPartitionFreeParameterSgeModel>(counts, geneIds, cellIds, partition, nbCategories, withDropout);
           sgeModel->print(cout);
 
           // Init parameter values:
