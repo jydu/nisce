@@ -9,7 +9,7 @@
  *
  *    Description:  Noise Inference from Single Cell Expression
  *
- *        Version:  0.999.0
+ *        Version:  1.0.0
  *        Created:  20.04.2023 10:39:22
  *       Revision:  none
  *       Compiler:  gcc
@@ -24,7 +24,6 @@
 // Compile with:
 // CC=gcc-12 CXX=g++-12 cmake -DCMAKE_INSTALL_PREFIX=$HOME/.local ..
 // make
-// Note: Clang not yet suported as C++17 does not implement parallelization.
 
 #define TBB_SUPPRESS_DEPRECATED_MESSAGES 1 // _Suppress TBB warning
 
@@ -49,16 +48,16 @@
 
 using namespace std;
 
-//Note: Boost is compiled using CLang on macos, which prevents its usage
-//From boost:
-//#include <boost/iostreams/device/file.hpp>
-//#include <boost/iostreams/filtering_stream.hpp>
-//#include <boost/iostreams/filter/gzip.hpp>
-//#include <boost/iostreams/filter/bzip2.hpp>
-//#include <boost/iostreams/filter/zlib.hpp>
-//using namespace boost::iostreams;
+// Note: Boost is compiled using CLang on macos, which prevents its usage
+// From boost:
+// #include <boost/iostreams/device/file.hpp>
+// #include <boost/iostreams/filtering_stream.hpp>
+// #include <boost/iostreams/filter/gzip.hpp>
+// #include <boost/iostreams/filter/bzip2.hpp>
+// #include <boost/iostreams/filter/zlib.hpp>
+// using namespace boost::iostreams;
 
-//From Zlib
+// From Zlib
 #include <zlib.h>
 
 // From bpp-core:
@@ -84,57 +83,67 @@ using namespace bpp;
 #include "CellPartitionLessFreeParameterSgeModel.h"
 
 
-class gzstreambuf : public std::streambuf {
-    static constexpr std::size_t buffer_size = 1 << 15;
+class gzstreambuf :
+  public std::streambuf
+{
+  static constexpr std::size_t buffer_size = 1 << 15;
 
-    gzFile file_;
-    std::array<char, buffer_size> buffer_;
+  gzFile file_;
+  std::array<char, buffer_size> buffer_;
 
 public:
-    explicit gzstreambuf(const string& filename) {
-        file_ = gzopen(filename.c_str(), "rb");
+  explicit gzstreambuf(const string& filename)
+  {
+    file_ = gzopen(filename.c_str(), "rb");
 
-        if (!file_) {
-            throw std::runtime_error("Cannot open gzip file");
-        }
-
-        setg(buffer_.data(), buffer_.data(), buffer_.data());
+    if (!file_)
+    {
+      throw std::runtime_error("Cannot open gzip file");
     }
 
-    ~gzstreambuf() override {
-        if (file_) {
-            gzclose(file_);
-        }
+    setg(buffer_.data(), buffer_.data(), buffer_.data());
+  }
+
+  ~gzstreambuf() override
+  {
+    if (file_)
+    {
+      gzclose(file_);
     }
+  }
 
 protected:
-    int_type underflow() override {
-        if (!file_) {
-            return traits_type::eof();
-        }
-
-        int bytes =
-            gzread(file_, buffer_.data(), buffer_size);
-
-        if (bytes <= 0) {
-            return traits_type::eof();
-        }
-
-        setg(buffer_.data(),
-             buffer_.data(),
-             buffer_.data() + bytes);
-
-        return traits_type::to_int_type(*gptr());
+  int_type underflow() override
+  {
+    if (!file_)
+    {
+      return traits_type::eof();
     }
+
+    int bytes =
+        gzread(file_, buffer_.data(), buffer_size);
+
+    if (bytes <= 0)
+    {
+      return traits_type::eof();
+    }
+
+    setg(buffer_.data(),
+        buffer_.data(),
+        buffer_.data() + bytes);
+
+    return traits_type::to_int_type(*gptr());
+  }
 };
 
-class igzstream : public std::istream {
-    gzstreambuf buffer_;
+class igzstream : public std::istream
+{
+  gzstreambuf buffer_;
 
 public:
-    explicit igzstream(const string& filename)
-        : std::istream(&buffer_),
-          buffer_(filename) {}
+  explicit igzstream(const string& filename)
+    : std::istream(&buffer_),
+    buffer_(filename) {}
 };
 
 d2_array_ui readCounts(shared_ptr<istream> input, d1_array_str& geneIds, d1_array_str& cellIds, char sep = ',')
@@ -180,27 +189,26 @@ d2_array_ui readCounts(shared_ptr<istream> input, d1_array_str& geneIds, d1_arra
 }
 
 
-
 void writeCounts(const d2_array_ui& counts, ostream& output,
-           const d1_array_str& geneIds, const d1_array_str& cellIds,
-           char sep = ',')
+    const d1_array_str& geneIds, const d1_array_str& cellIds,
+    char sep = ',')
 {
   output << "Gene";
-  for (auto cellId: cellIds) {
+  for (auto cellId: cellIds)
+  {
     output << sep << cellId;
   }
   output << endl;
   for (size_t i = 0; i < geneIds.size(); ++i)
   {
-    output << geneIds[i];    
+    output << geneIds[i];
     for (const auto& it : counts[i])
     {
       output << sep << it;
     }
     output << endl;
-  };
+  }
 }
-
 
 
 void help()
@@ -213,9 +221,9 @@ void help()
 int main(int argc, char* argv[])
 {
   cout << "******************************************************************" << endl;
-  cout << "*                  N.I.S.C.E., version 0.999.0                   *" << endl;
+  cout << "*                   N.I.S.C.E., version 1.0.0                    *" << endl;
   cout << "* Author: J. Dutheil                        Created on  24/04/23 *" << endl;
-  cout << "*                                           Last Modif. 28/05/26 *" << endl;
+  cout << "*                                           Last Modif. 17/06/26 *" << endl;
   cout << "******************************************************************" << endl;
   cout << endl;
 
@@ -235,7 +243,7 @@ int main(int argc, char* argv[])
     vector<string> cellIds;
     d2_array_ui counts;
     bool hasData = false;
-    char sep = ApplicationTools::getParameter<char>("input.file.column_separator", nisce.getParams(), ','); //Also used for partition tables
+    char sep = ApplicationTools::getParameter<char>("input.file.column_separator", nisce.getParams(), ','); // Also used for partition tables
     if (inputPath != "none" && inputPath != "None")
     {
       ApplicationTools::displayResult("Reading counts from", inputPath);
@@ -243,24 +251,28 @@ int main(int argc, char* argv[])
       // Read the counts:
       string compress = ApplicationTools::getStringParameter("input.file.compression", nisce.getParams(), "none");
 
-      //REquires BOOST:
-      //auto stream = make_shared<filtering_istream> ();
-      //if (compress == "none") {
-      //} else if (compress == "gzip") {
+      // REquires BOOST:
+      // auto stream = make_shared<filtering_istream> ();
+      // if (compress == "none") {
+      // } else if (compress == "gzip") {
       //  stream->push(gzip_decompressor());
-      //} else if (compress == "zip") {
+      // } else if (compress == "zip") {
       //  stream->push(zlib_decompressor());
-      //} else if (compress == "bzip2") {
+      // } else if (compress == "bzip2") {
       //  stream->push(bzip2_decompressor());
-      //} else
+      // } else
       //  throw Exception("Bad input incompression format: " + compress);
-      //stream->push(file_source(inputPath));
+      // stream->push(file_source(inputPath));
       shared_ptr<istream> stream;
-      if (compress == "none") {
-	stream = make_shared<ifstream>(inputPath);
-      } else if (compress == "gzip") {
-	stream = make_shared<igzstream>(inputPath);
-      } else
+      if (compress == "none")
+      {
+        stream = make_shared<ifstream>(inputPath);
+      }
+      else if (compress == "gzip")
+      {
+        stream = make_shared<igzstream>(inputPath);
+      }
+      else
         throw Exception("Bad input incompression format: " + compress);
 
       counts = readCounts(stream, geneIds, cellIds, sep);
@@ -331,30 +343,32 @@ int main(int argc, char* argv[])
     }
     else
     {
-      //If no input file is specified, only simulations can be performed. We create a dummy dataset:
+      // If no input file is specified, only simulations can be performed. We create a dummy dataset:
       size_t nbGenes = ApplicationTools::getParameter<size_t>("input.simulation.number_of_genes", nisce.getParams(), 5000);
       size_t nbCells = ApplicationTools::getParameter<size_t>("input.simulation.number_of_cells", nisce.getParams(), 5000);
       geneIds.resize(nbGenes);
       cellIds.resize(nbCells);
-      for (size_t i = 0; i < nbCells; ++i) {
+      for (size_t i = 0; i < nbCells; ++i)
+      {
         cellIds[i] = "c" + TextTools::toString(i + 1);
       }
-      for (size_t i = 0; i < nbGenes; ++i) {
+      for (size_t i = 0; i < nbGenes; ++i)
+      {
         geneIds[i] = "g" + TextTools::toString(i + 1);
-	counts.push_back(d1_array_ui(nbCells, 0));
+        counts.push_back(d1_array_ui(nbCells, 0));
       }
       ApplicationTools::displayMessage("Simulating data with");
       ApplicationTools::displayResult(" - Number of genes", nbGenes);
       ApplicationTools::displayResult(" - Number of cells", nbCells);
     }
-    
+
     // Select model:
     string partitionFile = ApplicationTools::getAFilePath("cell_partition.file", nisce.getParams(), false, true);
     string model = ApplicationTools::getStringParameter("model", nisce.getParams(), "FP");
     bool withDropout = ApplicationTools::getBooleanParameter("with_dropout", nisce.getParams(), true);
 
     auto analysis = ApplicationTools::getVectorParameter<string>("analysis", nisce.getParams(), ',', "estimate");
-    
+
     if (partitionFile == "None" || partitionFile == "none")
     {
       // ************************************
@@ -378,15 +392,18 @@ int main(int argc, char* argv[])
         // Create the data structure:
         auto sgeModel = make_shared<FreeParameterSgeModel>(counts, geneIds, cellIds, distribution, nbCategories, withDropout);
         sgeModel->print(cout);
-        
+
         // Init parameter values:
         string initDesc = ApplicationTools::getStringParameter("init_param", nisce.getParams(), "from_counts");
         string initMethod;
         map<string, string> initArgs;
         KeyvalTools::parseProcedure(initDesc, initMethod, initArgs);
-        if (initMethod == "from_counts") {
+        if (initMethod == "from_counts")
+        {
           sgeModel->initParameters();
-        } else if (initMethod == "from_files") {
+        }
+        else if (initMethod == "from_files")
+        {
           auto initGenePath = ApplicationTools::getAFilePath("gene_param", initArgs, true, true);
           auto initCellPath = ApplicationTools::getAFilePath("cell_param", initArgs, true, true);
           ApplicationTools::displayResult("Gene init. parameters in", initGenePath);
@@ -396,30 +413,33 @@ int main(int argc, char* argv[])
           auto geneParameters = DataTable::read(geneFile, ",", true, 0);
           auto cellParameters = DataTable::read(cellFile, ",", true, 0);
           sgeModel->initParameters(*geneParameters, *cellParameters);
-        } else {
+        }
+        else
+        {
           throw Exception("Unknown init method: " + initMethod);
         }
 
         if (VectorTools::contains(analysis, "estimate"))
         {
-	  if (! hasData) {
+          if (!hasData)
+          {
             throw Exception("ERROR: an input data file should be provided to estimate parameters.");
-	  }
+          }
           string prPath = ApplicationTools::getAFilePath("optimization.profiler", nisce.getParams(), false, false);
           string mhPath = ApplicationTools::getAFilePath("optimization.message_handler", nisce.getParams(), false, false);
 
           auto profiler =
-            (prPath == "none") ? nullptr :
-            (prPath == "std") ? ApplicationTools::message :
-            make_shared<StlOutputStream>(make_unique<fstream>(prPath.c_str(), ios::out));
+              (prPath == "none") ? nullptr :
+              (prPath == "std") ? ApplicationTools::message :
+              make_shared<StlOutputStream>(make_unique<fstream>(prPath.c_str(), ios::out));
           if (profiler)
             profiler->setPrecision(20);
           ApplicationTools::displayResult("-- Optimization profile in", prPath);
 
           auto messenger =
-            (mhPath == "none") ? nullptr :
-            (mhPath == "std") ? ApplicationTools::message :
-            make_shared<StlOutputStream>(make_unique<ofstream>(mhPath.c_str(), ios::out));
+              (mhPath == "none") ? nullptr :
+              (mhPath == "std") ? ApplicationTools::message :
+              make_shared<StlOutputStream>(make_unique<ofstream>(mhPath.c_str(), ios::out));
           if (messenger)
             messenger->setPrecision(20);
           ApplicationTools::displayResult("-- Optimization messages in", mhPath);
@@ -430,7 +450,8 @@ int main(int argc, char* argv[])
           bool optNorm = ApplicationTools::getBooleanParameter("optimization.estimate_norms", nisce.getParams(), true);
           ApplicationTools::displayBooleanResult("Estimate cell norms", optNorm);
 
-          if (optNorm) {
+          if (optNorm)
+          {
             opt.resize(4);
             opt[0].description = "Initial optimization";
             opt[1].description = "Coarse optimization";
@@ -438,11 +459,14 @@ int main(int argc, char* argv[])
             opt[3].description = "Final optimization";
             opt[0].tolerance = 1.0;
             opt[1].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance1", nisce.getParams(), 0.01);
-	    if (opt[1].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+            if (opt[1].tolerance <= 0)
+              throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[2].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance2", nisce.getParams(), 0.01);
-	    if (opt[2].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+            if (opt[2].tolerance <= 0)
+              throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[3].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance3", nisce.getParams(), 0.01);
-	    if (opt[3].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+            if (opt[3].tolerance <= 0)
+              throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[0].estimateNorms = false;
             opt[1].estimateNorms = optNorm;
             opt[2].estimateNorms = optNorm;
@@ -455,17 +479,20 @@ int main(int argc, char* argv[])
             opt[1].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes1.file", nisce.getParams(), false, false);
             opt[2].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes2.file", nisce.getParams(), false, false);
             opt[3].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes3.file", nisce.getParams(), false, false);
-          } else {
+          }
+          else
+          {
             opt.resize(1);
             opt[0].description = "Optimization";
             opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance", nisce.getParams(), 0.01);
-	    if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+            if (opt[0].tolerance <= 0)
+              throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[0].estimateNorms = optNorm;
             opt[0].outputCells = ApplicationTools::getAFilePath("output.parameters.cells.file", nisce.getParams(), false, false);
             opt[0].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes.file", nisce.getParams(), false, false);
           }
 
-          sgeModel -> optimize(profiler, messenger, opt);
+          sgeModel->optimize(profiler, messenger, opt);
 
           // Final results:
           string outputGeneResults = ApplicationTools::getAFilePath("output.results.genes.file", nisce.getParams(), false, false);
@@ -502,20 +529,20 @@ int main(int argc, char* argv[])
             unsigned int progress = 0;
             d2_array_dbl hessianValues(sgeModel->nbGenes_);
             for_each (std::execution::par,
-                      sgeModel->geneIndex_.begin(),
-                      sgeModel->geneIndex_.end(),
-                      [&](size_t i)
+                sgeModel->geneIndex_.begin(),
+                sgeModel->geneIndex_.end(),
+                [&](size_t i)
             {
               auto f = make_shared<FreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
               auto numDer = make_shared<ThreePointsNumericalDerivative>(f);
               numDer->enableSecondOrderDerivatives(true);
               numDer->enableSecondOrderCrossDerivatives(false);
               numDer->setParametersToDerivate(params);
-              numDer->setParameters(numDer->getParameters()); //Induce calculation of derivatives.
+              numDer->setParameters(numDer->getParameters()); // Induce calculation of derivatives.
               hessianValues[i].resize(params.size());
               for (size_t k = 0; k < params.size(); ++k)
               {
-                hessianValues[i][k] = - numDer->getSecondOrderDerivative(params[k]); //We use - here as the function is -logLik
+                hessianValues[i][k] = -numDer->getSecondOrderDerivative(params[k]); // We use - here as the function is -logLik
               }
               progress++;
               ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
@@ -528,33 +555,37 @@ int main(int argc, char* argv[])
               {
                 streamGeneCIResults << "," << v;
               }
-              streamGeneCIResults << endl; 
+              streamGeneCIResults << endl;
             }
             streamGeneCIResults.close();
           }
         }
-        
-        //Perform simulations
+
+        // Perform simulations
         if (VectorTools::contains(analysis, "simulate"))
         {
           unsigned int nbSim = ApplicationTools::getParameter<unsigned int>("nb_replicates", nisce.getParams(), 10);
           string outputSimPath = ApplicationTools::getStringParameter("simulation_output_path", nisce.getParams(), "sim%i.csv");
           ApplicationTools::displayResult("Number of replicates", nbSim);
           ApplicationTools::displayTask("Simulating...");
-          for (unsigned int k = 0; k < nbSim; ++k) {
+          for (unsigned int k = 0; k < nbSim; ++k)
+          {
             char path[300]; snprintf(path, 300, outputSimPath.c_str(), k);
             ApplicationTools::displayGauge(k, nbSim - 1, '=');
             auto simCounts = sgeModel->simulateCounts();
-            //Write to file:
+            // Write to file:
             ofstream outSim(path, ios::out);
             outSim << "Genes";
-            for (size_t j = 0; j < cellIds.size(); ++j) {
+            for (size_t j = 0; j < cellIds.size(); ++j)
+            {
               outSim << "," << cellIds[j];
             }
             outSim << endl;
-            for (size_t i = 0; i < geneIds.size(); ++i) {
+            for (size_t i = 0; i < geneIds.size(); ++i)
+            {
               outSim << geneIds[i];
-              for (size_t j = 0; j < cellIds.size(); ++j) {
+              for (size_t j = 0; j < cellIds.size(); ++j)
+              {
                 outSim << "," << (*simCounts)[i][j];
               }
               outSim << endl;
@@ -562,7 +593,6 @@ int main(int argc, char* argv[])
           }
           ApplicationTools::displayTaskDone();
         }
-
       }
       else if (model == "LFP" || model == "LessFreeParameters")
       {
@@ -592,15 +622,18 @@ int main(int argc, char* argv[])
         string initMethod;
         map<string, string> initArgs;
         KeyvalTools::parseProcedure(initDesc, initMethod, initArgs);
-        if (initMethod == "from_counts") {
+        if (initMethod == "from_counts")
+        {
           sgeModel->initParameters();
           if (dropoutPrior == "Beta")
-          { 
+          {
             double a = ApplicationTools::getParameter<double>("alpha", dropoutPriorParam, 0.5);
             double b = ApplicationTools::getParameter<double>("beta", dropoutPriorParam, 1.0);
             sgeModel->setHyperparameters({a, b});
           }
-        } else if (initMethod == "from_files") {
+        }
+        else if (initMethod == "from_files")
+        {
           auto initGenePath = ApplicationTools::getAFilePath("gene_param", initArgs, true, true);
           auto initCellPath = ApplicationTools::getAFilePath("cell_param", initArgs, true, true);
           ApplicationTools::displayResult("Gene init. parameters in", initGenePath);
@@ -610,30 +643,33 @@ int main(int argc, char* argv[])
           auto geneParameters = DataTable::read(geneFile, ",", true, 0);
           auto cellParameters = DataTable::read(cellFile, ",", true, 0);
           sgeModel->initParameters(*geneParameters, *cellParameters);
-        } else {
+        }
+        else
+        {
           throw Exception("Unknown init method: " + initMethod);
         }
         sgeModel->displayHyperParameters(cout);
 
         if (VectorTools::contains(analysis, "estimate"))
-        { 
-	  if (! hasData) {
+        {
+          if (!hasData)
+          {
             throw Exception("ERROR: an input data file should be provided to estimate parameters.");
-	  }
+          }
           string prPath = ApplicationTools::getAFilePath("optimization.profiler", nisce.getParams(), false, false);
           string mhPath = ApplicationTools::getAFilePath("optimization.message_handler", nisce.getParams(), false, false);
 
           auto profiler =
-           (prPath == "none") ? nullptr :
-           (prPath == "std") ? ApplicationTools::message :
-             make_shared<StlOutputStream>(make_unique<fstream>(prPath.c_str(), ios::out));
+              (prPath == "none") ? nullptr :
+              (prPath == "std") ? ApplicationTools::message :
+              make_shared<StlOutputStream>(make_unique<fstream>(prPath.c_str(), ios::out));
           if (profiler)
             profiler->setPrecision(20);
           ApplicationTools::displayResult("-- Optimization profile in", prPath);
 
           auto messenger =
-            (mhPath == "none") ? nullptr :
-            (mhPath == "std") ? ApplicationTools::message :
+              (mhPath == "none") ? nullptr :
+              (mhPath == "std") ? ApplicationTools::message :
               make_shared<StlOutputStream>(make_unique<ofstream>(mhPath.c_str(), ios::out));
           if (messenger)
             messenger->setPrecision(20);
@@ -647,17 +683,21 @@ int main(int argc, char* argv[])
           ApplicationTools::displayBooleanResult("Estimate cell norms", optNorm);
           ApplicationTools::displayBooleanResult("Estimate hyper-parameters", optHyper);
 
-          if (optNorm || optHyper) {
+          if (optNorm || optHyper)
+          {
             opt.resize(3);
             opt[0].description = "Initial optimization";
             opt[1].description = "Refining optimization";
             opt[2].description = "Final optimization";
             opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance1", nisce.getParams(), 0.01);
-	    if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+            if (opt[0].tolerance <= 0)
+              throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[1].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance2", nisce.getParams(), 0.01);
-	    if (opt[1].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+            if (opt[1].tolerance <= 0)
+              throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[2].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance3", nisce.getParams(), 0.01);
-	    if (opt[2].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+            if (opt[2].tolerance <= 0)
+              throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[0].estimateNorms = optNorm;
             opt[1].estimateNorms = optNorm;
             opt[2].estimateNorms = optNorm;
@@ -673,11 +713,14 @@ int main(int argc, char* argv[])
             opt[0].estimateHyperParameters = optHyper;
             opt[1].estimateHyperParameters = optHyper;
             opt[2].estimateHyperParameters = optHyper;
-          } else {
+          }
+          else
+          {
             opt.resize(1);
             opt[0].description = "Optimization";
             opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance", nisce.getParams(), 0.01);
-	    if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+            if (opt[0].tolerance <= 0)
+              throw Exception("ERROR: tolerance parameter must be strictly positive.");
             opt[0].estimateNorms = optNorm;
             opt[0].outputCells = ApplicationTools::getAFilePath("output.parameters.cells.file", nisce.getParams(), false, false);
             opt[0].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes.file", nisce.getParams(), false, false);
@@ -685,7 +728,7 @@ int main(int argc, char* argv[])
             opt[0].estimateHyperParameters = optHyper;
           }
 
-          sgeModel -> optimize(profiler, messenger, opt);
+          sgeModel->optimize(profiler, messenger, opt);
 
           // Final results:
           string outputGeneResults = ApplicationTools::getAFilePath("output.results.genes.file", nisce.getParams(), false, false);
@@ -696,7 +739,7 @@ int main(int argc, char* argv[])
             streamGeneResults.close();
           }
         }
-       
+
         // Compute Posterior Estimates:
         if (VectorTools::contains(analysis, "getPosteriorEstimates"))
         {
@@ -729,20 +772,20 @@ int main(int argc, char* argv[])
             unsigned int progress = 0;
             d2_array_dbl hessianValues(sgeModel->nbGenes_);
             for_each (std::execution::par,
-                      sgeModel->geneIndex_.begin(),
-                      sgeModel->geneIndex_.end(),
-                      [&](size_t i)
+                sgeModel->geneIndex_.begin(),
+                sgeModel->geneIndex_.end(),
+                [&](size_t i)
             {
               auto f = make_shared<LessFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
               auto numDer = make_shared<ThreePointsNumericalDerivative>(f);
               numDer->enableSecondOrderDerivatives(true);
               numDer->enableSecondOrderCrossDerivatives(false);
               numDer->setParametersToDerivate(params);
-              numDer->setParameters(numDer->getParameters()); //Induce calculation of derivatives.
+              numDer->setParameters(numDer->getParameters()); // Induce calculation of derivatives.
               hessianValues[i].resize(params.size());
               for (size_t k = 0; k < params.size(); ++k)
               {
-                hessianValues[i][k] = - numDer->getSecondOrderDerivative(params[k]); //We use - here as the function is -logLik
+                hessianValues[i][k] = -numDer->getSecondOrderDerivative(params[k]); // We use - here as the function is -logLik
               }
               progress++;
               ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
@@ -755,12 +798,14 @@ int main(int argc, char* argv[])
               {
                 streamGeneCIResults << "," << v;
               }
-              streamGeneCIResults << endl; 
+              streamGeneCIResults << endl;
             }
             streamGeneCIResults.close();
           }
         }
-      } else {
+      }
+      else
+      {
         throw Exception("Unsupported model: " + model);
       }
     }
@@ -778,7 +823,7 @@ int main(int argc, char* argv[])
       size_t nbPartitions = partitions->getNumberOfColumns();
       ApplicationTools::displayResult("Number of partitions found", nbPartitions);
 
-      //Check cells:
+      // Check cells:
       auto cellsInPartitions = partitions->getRowNames();
       for (size_t i = partitions->getNumberOfRows(); i > 0; --i)
       {
@@ -798,8 +843,15 @@ int main(int argc, char* argv[])
 
       bool aliasShape = ApplicationTools::getBooleanParameter("alias_shape", nisce.getParams(), false);
       ApplicationTools::displayBooleanResult("Single shape parameter", aliasShape);
-      
-      string partitionResultFile = ApplicationTools::getStringParameter("cell_partition.result.file", nisce.getParams(), "None");
+
+      string partitionResultFile = "None";
+      if (nisce.getParams().contains("cell_partition.result.file")) {
+        ApplicationTools::displayWarning("Argument 'cell_partition.result.file' is deprecated,");
+        ApplicationTools::displayWarning("it has been replaced by 'output.results.cell_partition.file'.");
+        partitionResultFile = ApplicationTools::getStringParameter("cell_partition.result.file", nisce.getParams(), "None");
+      } else {
+        partitionResultFile = ApplicationTools::getStringParameter("output.results.cell_partition.file", nisce.getParams(), "None");
+      }
 
       if (partitionResultFile == "None" || partitionResultFile == "none")
       {
@@ -810,16 +862,16 @@ int main(int argc, char* argv[])
       string mhPath = ApplicationTools::getAFilePath("optimization.message_handler", nisce.getParams(), false, false);
 
       auto profiler =
-        (prPath == "none") ? nullptr :
-        (prPath == "std") ? ApplicationTools::message :
-           make_shared<StlOutputStream>(make_unique<fstream>(prPath.c_str(), ios::out));
+          (prPath == "none") ? nullptr :
+          (prPath == "std") ? ApplicationTools::message :
+          make_shared<StlOutputStream>(make_unique<fstream>(prPath.c_str(), ios::out));
       if (profiler)
         profiler->setPrecision(20);
       ApplicationTools::displayResult("-- Optimization profile in", prPath);
 
       auto messenger =
-        (mhPath == "none") ? nullptr :
-        (mhPath == "std") ? ApplicationTools::message :
+          (mhPath == "none") ? nullptr :
+          (mhPath == "std") ? ApplicationTools::message :
           make_shared<StlOutputStream>(make_unique<ofstream>(mhPath.c_str(), ios::out));
       if (messenger)
         messenger->setPrecision(20);
@@ -833,7 +885,7 @@ int main(int argc, char* argv[])
         ApplicationTools::displayResult("Fitting partition model", partitions->getColumnName(p));
         // Read partition:
         map<string, std::vector<size_t>> pMap;
-        for (size_t j = 0; j < partitions->getNumberOfRows(); ++j) 
+        for (size_t j = 0; j < partitions->getNumberOfRows(); ++j)
         {
           string cell = partitions->getRowName(j);
           pMap[(*partitions)(j, p)].push_back(VectorTools::which(cellIds, cell));
@@ -847,7 +899,7 @@ int main(int argc, char* argv[])
           // * Simple model with free parameters. Gamma or ScaledBeta. *
           // *                                                         *
           // ***********************************************************
-          
+
           // Create the data structure:
           auto sgeModel = make_shared<CellPartitionFreeParameterSgeModel>(counts, geneIds, cellIds, partition, nbCategories, withDropout);
           sgeModel->print(cout);
@@ -857,33 +909,40 @@ int main(int argc, char* argv[])
           string initMethod;
           map<string, string> initArgs;
           KeyvalTools::parseProcedure(initDesc, initMethod, initArgs);
-          if (initMethod == "from_counts") {
+          if (initMethod == "from_counts")
+          {
             sgeModel->initParameters();
-          } else if (initMethod == "from_files") {
+          }
+          else if (initMethod == "from_files")
+          {
             throw Exception("Not yet implemented: " + initMethod);
-            //auto initGenePath = ApplicationTools::getAFilePath("gene_param", initArgs, true, true);
-            //auto initCellPath = ApplicationTools::getAFilePath("cell_param", initArgs, true, true);
-            //ApplicationTools::displayResult("Gene init. parameters in", initGenePath);
-            //ApplicationTools::displayResult("Cell init. parameters in", initCellPath);
-            //ifstream geneFile(initGenePath, ios::in);
-            //ifstream cellFile(initCellPath, ios::in);
-            //auto geneParameters = DataTable::read(geneFile, ",", true, 0);
-            //auto cellParameters = DataTable::read(cellFile, ",", true, 0);
-            //sgeModel->initParameters(*geneParameters, *cellParameters);
-          } else {
+            // auto initGenePath = ApplicationTools::getAFilePath("gene_param", initArgs, true, true);
+            // auto initCellPath = ApplicationTools::getAFilePath("cell_param", initArgs, true, true);
+            // ApplicationTools::displayResult("Gene init. parameters in", initGenePath);
+            // ApplicationTools::displayResult("Cell init. parameters in", initCellPath);
+            // ifstream geneFile(initGenePath, ios::in);
+            // ifstream cellFile(initCellPath, ios::in);
+            // auto geneParameters = DataTable::read(geneFile, ",", true, 0);
+            // auto cellParameters = DataTable::read(cellFile, ",", true, 0);
+            // sgeModel->initParameters(*geneParameters, *cellParameters);
+          }
+          else
+          {
             throw Exception("Unknown init method: " + initMethod);
           }
-        
+
           if (VectorTools::contains(analysis, "estimate"))
-          { 
-	    if (! hasData) {
+          {
+            if (!hasData)
+            {
               throw Exception("ERROR: an input data file should be provided to estimate parameters.");
-	    }
+            }
             vector<OptimizationParameters> opt;
             bool optNorm = ApplicationTools::getBooleanParameter("optimization.estimate_norms", nisce.getParams(), true);
             ApplicationTools::displayBooleanResult("Estimate cell norms", optNorm);
 
-            if (optNorm) {
+            if (optNorm)
+            {
               opt.resize(4);
               opt[0].description = "Initial optimization";
               opt[1].description = "Coarse optimization";
@@ -891,11 +950,14 @@ int main(int argc, char* argv[])
               opt[3].description = "Final optimization";
               opt[0].tolerance = 1.0;
               opt[1].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance1", nisce.getParams(), 0.01);
-	      if (opt[1].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+              if (opt[1].tolerance <= 0)
+                throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[2].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance2", nisce.getParams(), 0.01);
-	      if (opt[2].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+              if (opt[2].tolerance <= 0)
+                throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[3].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance3", nisce.getParams(), 0.01);
-	      if (opt[3].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+              if (opt[3].tolerance <= 0)
+                throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[0].estimateNorms = false;
               opt[1].estimateNorms = optNorm;
               opt[2].estimateNorms = optNorm;
@@ -924,22 +986,25 @@ int main(int argc, char* argv[])
               opt[1].aliasShape = aliasShape;
               opt[2].aliasShape = aliasShape;
               opt[3].aliasShape = aliasShape;
-            } else {
+            }
+            else
+            {
               opt.resize(1);
               opt[0].description = "Optimization";
               opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance", nisce.getParams(), 0.01);
-	      if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+              if (opt[0].tolerance <= 0)
+                throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[0].estimateNorms = optNorm;
               opt[0].outputCells = ApplicationTools::getAFilePath("output.parameters.cells.file", nisce.getParams(), false, false);
               if (opt[0].outputCells != "none" && opt[0].outputCells != "None")
                 opt[0].outputCells += ".part" + TextTools::toString(p + 1);
               opt[0].outputGenes = ApplicationTools::getAFilePath("output.parameters.genes.file", nisce.getParams(), false, false);
               if (opt[0].outputGenes != "none" && opt[0].outputGenes != "None")
-              opt[0].outputGenes += ".part" + TextTools::toString(p + 1);
+                opt[0].outputGenes += ".part" + TextTools::toString(p + 1);
               opt[0].aliasShape = aliasShape;
             }
 
-            sgeModel -> optimize(profiler, messenger, opt);
+            sgeModel->optimize(profiler, messenger, opt);
 
             // Final results:
             string outputGeneResults = ApplicationTools::getAFilePath("output.results.genes.file", nisce.getParams(), false, false);
@@ -953,26 +1018,29 @@ int main(int argc, char* argv[])
             // Store model results:
             partitionLogLikelihoods[p] = sgeModel->getLogLikelihood();
             partitionNbParameters[p] = sgeModel->getNumberOfParameters();
-	  }
+          }
 
           if (VectorTools::contains(analysis, "getCI"))
-          { 
+          {
             // Compute Confidence intervals:
             string outputGeneCIResults = ApplicationTools::getAFilePath("output.results.genes_hessian.file", nisce.getParams(), false, false);
             if (outputGeneCIResults != "none" && outputGeneCIResults != "None")
             {
               ofstream streamGeneCIResults(outputGeneCIResults + ".part" + TextTools::toString(p + 1), ios::out);
               auto f0 = make_unique<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, 0);
-              if (aliasShape) {
+              if (aliasShape)
+              {
                 auto pnames = f0->getParameters().getParameterNames();
                 pnames.erase(remove_if(pnames.begin(),
-                                       pnames.end(),
-                                       [](const string& name) {
-                                         return(!name.ends_with("Shape"));
-                                       }),
-                             pnames.end());
-                for (auto name : pnames) {
-                  if (name != pnames[0] ) {
+                      pnames.end(),
+                      [](const string& name) {
+                  return !name.ends_with("Shape");
+                }),
+                    pnames.end());
+                for (auto name : pnames)
+                {
+                  if (name != pnames[0])
+                  {
                     f0->aliasParameters(pnames[0], name);
                   }
                 }
@@ -990,21 +1058,24 @@ int main(int argc, char* argv[])
               unsigned int progress = 0;
               d2_array_dbl hessianValues(sgeModel->nbGenes_);
               for_each (std::execution::par,
-                        sgeModel->geneIndex_.begin(),
-                        sgeModel->geneIndex_.end(),
-                        [&](size_t i)
+                  sgeModel->geneIndex_.begin(),
+                  sgeModel->geneIndex_.end(),
+                  [&](size_t i)
               {
                 auto f = make_shared<CellPartitionFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
-                if (aliasShape) {
+                if (aliasShape)
+                {
                   auto pnames = f->getParameters().getParameterNames();
                   pnames.erase(remove_if(pnames.begin(),
-                                         pnames.end(),
-                                         [](const string& name) {
-                                           return(!name.ends_with("Shape"));
-                                         }),
-                               pnames.end());
-                  for (auto name : pnames) {
-                    if (name != pnames[0] ) {
+                        pnames.end(),
+                        [](const string& name) {
+                    return !name.ends_with("Shape");
+                  }),
+                  pnames.end());
+                  for (auto name : pnames)
+                  {
+                    if (name != pnames[0])
+                    {
                       f->aliasParameters(pnames[0], name);
                     }
                   }
@@ -1013,31 +1084,31 @@ int main(int argc, char* argv[])
                 numDer->enableSecondOrderDerivatives(true);
                 numDer->enableSecondOrderCrossDerivatives(false);
                 numDer->setParametersToDerivate(params);
-                numDer->setParameters(numDer->getParameters()); //Induce calculation of derivatives.
+                numDer->setParameters(numDer->getParameters()); // Induce calculation of derivatives.
                 hessianValues[i].resize(params.size());
                 for (size_t k = 0; k < params.size(); ++k)
                 {
-                  hessianValues[i][k] = - numDer->getSecondOrderDerivative(params[k]); //We use - here as the function is -logLik
+                  hessianValues[i][k] = -numDer->getSecondOrderDerivative(params[k]); // We use - here as the function is -logLik
                 }
                 progress++;
                 ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
               });
               ApplicationTools::displayTaskDone();
-             for (size_t i = 0; i < sgeModel->nbGenes_; ++i)
-              { 
+              for (size_t i = 0; i < sgeModel->nbGenes_; ++i)
+              {
                 streamGeneCIResults << sgeModel->geneIds_[i];
                 for (auto v : hessianValues[i])
                 {
                   streamGeneCIResults << "," << v;
                 }
-                streamGeneCIResults << endl; 
+                streamGeneCIResults << endl;
               }
               streamGeneCIResults.close();
             }
-	  }
-
-        } else if (model == "LFP" || model == "LessFreeParameters") {
-
+          }
+        }
+        else if (model == "LFP" || model == "LessFreeParameters")
+        {
           // ***********************************************************
           // *                                                         *
           // * Simple model with free parameters. Gamma or ScaledBeta. *
@@ -1051,7 +1122,7 @@ int main(int argc, char* argv[])
           map<string, string> dropoutPriorParam;
           KeyvalTools::parseProcedure(dropoutPriorDesc, dropoutPrior, dropoutPriorParam);
           size_t nbRCategories = ApplicationTools::getParameter<size_t>("nb_categories", dropoutPriorParam, 10);
-         
+
           // Create the data structure:
           auto sgeModel = make_shared<CellPartitionLessFreeParameterSgeModel>(counts, geneIds, cellIds, partition, nbCategories, nbRCategories, dropoutPrior);
           sgeModel->print(cout);
@@ -1061,59 +1132,69 @@ int main(int argc, char* argv[])
           string initMethod;
           map<string, string> initArgs;
           KeyvalTools::parseProcedure(initDesc, initMethod, initArgs);
-          if (initMethod == "from_counts") {
+          if (initMethod == "from_counts")
+          {
             sgeModel->initParameters();
             if (dropoutPrior == "Beta")
-            { 
+            {
               double a = ApplicationTools::getParameter<double>("alpha", dropoutPriorParam, 0.5);
               double b = ApplicationTools::getParameter<double>("beta", dropoutPriorParam, 1.0);
               sgeModel->setHyperparameters({a, b});
             }
-          } else if (initMethod == "from_files") {
+          }
+          else if (initMethod == "from_files")
+          {
             throw Exception("Not yet implemented: " + initMethod);
-            //auto initGenePath = ApplicationTools::getAFilePath("gene_param", initArgs, true, true);
-            //auto initCellPath = ApplicationTools::getAFilePath("cell_param", initArgs, true, true);
-            //ApplicationTools::displayResult("Gene init. parameters in", initGenePath);
-            //ApplicationTools::displayResult("Cell init. parameters in", initCellPath);
-            //ifstream geneFile(initGenePath, ios::in);
-            //ifstream cellFile(initCellPath, ios::in);
-            //auto geneParameters = DataTable::read(geneFile, ",", true, 0);
-            //auto cellParameters = DataTable::read(cellFile, ",", true, 0);
-            //sgeModel->initParameters(*geneParameters, *cellParameters);
-          } else {
+            // auto initGenePath = ApplicationTools::getAFilePath("gene_param", initArgs, true, true);
+            // auto initCellPath = ApplicationTools::getAFilePath("cell_param", initArgs, true, true);
+            // ApplicationTools::displayResult("Gene init. parameters in", initGenePath);
+            // ApplicationTools::displayResult("Cell init. parameters in", initCellPath);
+            // ifstream geneFile(initGenePath, ios::in);
+            // ifstream cellFile(initCellPath, ios::in);
+            // auto geneParameters = DataTable::read(geneFile, ",", true, 0);
+            // auto cellParameters = DataTable::read(cellFile, ",", true, 0);
+            // sgeModel->initParameters(*geneParameters, *cellParameters);
+          }
+          else
+          {
             throw Exception("Unknown init method: " + initMethod);
           }
           sgeModel->displayHyperParameters(cout);
 
           if (VectorTools::contains(analysis, "estimate"))
-          { 
-	    if (! hasData) {
+          {
+            if (!hasData)
+            {
               throw Exception("ERROR: an input data file should be provided to estimate parameters.");
-	    }
+            }
             vector<OptimizationParameters> opt;
             bool optNorm = ApplicationTools::getBooleanParameter("optimization.estimate_norms", nisce.getParams(), true);
             bool optHyper = ApplicationTools::getBooleanParameter("optimization.dropout_prior.estimate_hyper_parameters", nisce.getParams(), true);
             ApplicationTools::displayBooleanResult("Estimate cell norms", optNorm);
             ApplicationTools::displayBooleanResult("Estimate hyper-parameters", optHyper);
-    
-            if (optNorm || optHyper) {
+
+            if (optNorm || optHyper)
+            {
               opt.resize(3);
               opt[0].description = "Initial optimization";
               opt[1].description = "Refining optimization";
               opt[2].description = "Final optimization";
               opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance1", nisce.getParams(), 0.01);
-	      if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+              if (opt[0].tolerance <= 0)
+                throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[1].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance2", nisce.getParams(), 0.01);
-	      if (opt[1].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+              if (opt[1].tolerance <= 0)
+                throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[2].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance3", nisce.getParams(), 0.01);
-	      if (opt[2].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+              if (opt[2].tolerance <= 0)
+                throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[0].estimateNorms = optNorm;
               opt[1].estimateNorms = optNorm;
               opt[2].estimateNorms = optNorm;
               opt[0].outputCells = ApplicationTools::getAFilePath("output.parameters.cells1.file", nisce.getParams(), false, false);
               if (opt[0].outputCells != "none" && opt[0].outputCells != "None")
                 opt[0].outputCells += ".part" + TextTools::toString(p + 1);
-               opt[1].outputCells = ApplicationTools::getAFilePath("output.parameters.cells2.file", nisce.getParams(), false, false);
+              opt[1].outputCells = ApplicationTools::getAFilePath("output.parameters.cells2.file", nisce.getParams(), false, false);
               if (opt[1].outputCells != "none" && opt[1].outputCells != "None")
                 opt[1].outputCells += ".part" + TextTools::toString(p + 1);
               opt[2].outputCells = ApplicationTools::getAFilePath("output.parameters.cells3.file", nisce.getParams(), false, false);
@@ -1143,11 +1224,14 @@ int main(int argc, char* argv[])
               opt[0].aliasShape = aliasShape;
               opt[1].aliasShape = aliasShape;
               opt[2].aliasShape = aliasShape;
-            } else {
+            }
+            else
+            {
               opt.resize(1);
               opt[0].description = "Optimization";
               opt[0].tolerance = ApplicationTools::getDoubleParameter("optimization.tolerance", nisce.getParams(), 0.01);
-	      if (opt[0].tolerance <= 0) throw Exception("ERROR: tolerance parameter must be strictly positive.");
+              if (opt[0].tolerance <= 0)
+                throw Exception("ERROR: tolerance parameter must be strictly positive.");
               opt[0].estimateNorms = optNorm;
               opt[0].outputCells = ApplicationTools::getAFilePath("output.parameters.cells.file", nisce.getParams(), false, false);
               if (opt[0].outputCells != "none" && opt[0].outputCells != "None")
@@ -1162,7 +1246,7 @@ int main(int argc, char* argv[])
               opt[0].aliasShape = aliasShape;
             }
 
-            sgeModel -> optimize(profiler, messenger, opt);
+            sgeModel->optimize(profiler, messenger, opt);
 
             // Final results:
             string outputGeneResults = ApplicationTools::getAFilePath("output.results.genes.file", nisce.getParams(), false, false);
@@ -1172,11 +1256,11 @@ int main(int argc, char* argv[])
               sgeModel->printResultsForGenes(streamGeneResults);
               streamGeneResults.close();
             }
-            
-	    // Store model results:
+
+            // Store model results:
             partitionLogLikelihoods[p] = sgeModel->getLogLikelihood();
             partitionNbParameters[p] = sgeModel->getNumberOfParameters();
-	  }
+          }
 
           // Compute Posterior Estimates:
           if (VectorTools::contains(analysis, "getPosteriorEstimates"))
@@ -1191,23 +1275,26 @@ int main(int argc, char* argv[])
           }
 
           if (VectorTools::contains(analysis, "getCI"))
-          { 
+          {
             // Compute Confidence intervals:
             string outputGeneCIResults = ApplicationTools::getAFilePath("output.results.genes_hessian.file", nisce.getParams(), false, false);
             if (outputGeneCIResults != "none")
             {
               ofstream streamGeneCIResults(outputGeneCIResults + ".part" + TextTools::toString(p + 1), ios::out);
               auto f0 = make_unique<CellPartitionLessFreeParameterSgeModel::GeneLikelihood>(sgeModel, 0);
-              if (aliasShape) {
+              if (aliasShape)
+              {
                 auto pnames = f0->getParameters().getParameterNames();
                 pnames.erase(remove_if(pnames.begin(),
-                                       pnames.end(),
-                                       [](const string& name) {
-                                         return(!name.ends_with("Shape"));
-                                       }),
-                             pnames.end());
-                for (auto name : pnames) {
-                  if (name != pnames[0] ) {
+                      pnames.end(),
+                      [](const string& name) {
+                  return !name.ends_with("Shape");
+                }),
+                    pnames.end());
+                for (auto name : pnames)
+                {
+                  if (name != pnames[0])
+                  {
                     f0->aliasParameters(pnames[0], name);
                   }
                 }
@@ -1225,21 +1312,24 @@ int main(int argc, char* argv[])
               unsigned int progress = 0;
               d2_array_dbl hessianValues(sgeModel->nbGenes_);
               for_each (std::execution::par,
-                        sgeModel->geneIndex_.begin(),
-                        sgeModel->geneIndex_.end(),
-                        [&](size_t i)
+                  sgeModel->geneIndex_.begin(),
+                  sgeModel->geneIndex_.end(),
+                  [&](size_t i)
               {
                 auto f = make_shared<CellPartitionLessFreeParameterSgeModel::GeneLikelihood>(sgeModel, i);
-                if (aliasShape) {
+                if (aliasShape)
+                {
                   auto pnames = f->getParameters().getParameterNames();
                   pnames.erase(remove_if(pnames.begin(),
-                                         pnames.end(),
-                                         [](const string& name) {
-                                           return(!name.ends_with("Shape"));
-                                         }),
-                               pnames.end());
-                  for (auto name : pnames) {
-                    if (name != pnames[0] ) {
+                        pnames.end(),
+                        [](const string& name) {
+                    return !name.ends_with("Shape");
+                  }),
+                  pnames.end());
+                  for (auto name : pnames)
+                  {
+                    if (name != pnames[0])
+                    {
                       f->aliasParameters(pnames[0], name);
                     }
                   }
@@ -1248,11 +1338,11 @@ int main(int argc, char* argv[])
                 numDer->enableSecondOrderDerivatives(true);
                 numDer->enableSecondOrderCrossDerivatives(false);
                 numDer->setParametersToDerivate(params);
-                numDer->setParameters(numDer->getParameters()); //Induce calculation of derivatives.
+                numDer->setParameters(numDer->getParameters()); // Induce calculation of derivatives.
                 hessianValues[i].resize(params.size());
                 for (size_t k = 0; k < params.size(); ++k)
                 {
-                  hessianValues[i][k] = - numDer->getSecondOrderDerivative(params[k]); //We use - here as the function is -logLik
+                  hessianValues[i][k] = -numDer->getSecondOrderDerivative(params[k]); // We use - here as the function is -logLik
                 }
                 progress++;
                 ApplicationTools::displayGauge(progress, sgeModel->geneIndex_.size() - 1, '=');
@@ -1265,13 +1355,14 @@ int main(int argc, char* argv[])
                 {
                   streamGeneCIResults << "," << v;
                 }
-                streamGeneCIResults << endl; 
+                streamGeneCIResults << endl;
               }
               streamGeneCIResults.close();
             }
-	  }
-
-        } else {
+          }
+        }
+        else
+        {
           throw Exception("Unsupported model: " + model);
         }
       }

@@ -15,6 +15,7 @@ install_manifest.txt
 .clang*
 *.sw*
 build
+example/S_paradoxus_CBS8841_rep1_Gamma*
 
 # file to be specifically not ignored by previous rules
 

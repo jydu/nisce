@@ -2,50 +2,80 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-DATA=SpFirstGen
+DATA = S_paradoxus_CBS8841_rep1
 
-//Input:
-input.file = countsYPRP.csv 
-input.file.column_separator = , 
+//
+// INPUT
+//
+
+input.file = $(DATA)_filtered_nisce.csv.gz 
+input.file.column_separator = ,
+input.file.compression = gzip 
+
+// Filtering:
 min_nb_cells_with_obs = 10
 
-//Model:
-model = #FP, EB, etc.
+//
+// MODEL
+//
+
+model = FP #Free parameter
+gene_distribution = Gamma // or ScaledBeta
+with_dropout = yes //Otherwise all dropout parameters are fixed to 0 (and do not count as parameters).
 
 //Number of discrete categories to modulate the Poisson process:
 nb_categories = 10
 
-PREFIX=$(DATA)_$(model)
-
-init_param = from_counts
+init_param = from_counts //Use raw estimates as first guess of the parameter values.
 
 analysis = estimate, getCI
 
-//Optimization parameters:
+// Variable used to name the output files:
+PREFIX=$(DATA)_$(gene_distribution)
+
+//
+// Model fitting
+//
+
 optimization.message_handler = $(PREFIX)_optimization_messages.log
 optimization.profiler =  $(PREFIX)_optimization_profile.log
-optimization.estimate_norms = no
-optimization.tolerance = 0.01
+optimization.estimate_norms = no //if no, analytical asymptotic estimator are used
+optimization.tolerance = 0.000001
 
+//These options are in case norms are also estimated, iteratively:
+//optimization.tolerance1 = 0.01
+//optimization.tolerance2 = 0.0001
+//optimization.tolerance3 = 0.000001
+
+//
+// OUTPUT
+// 
+
+// A copy of the input data after filtering:
+output.selected_counts.file = None
+
+// Estimated parameters:
 output.parameters.genes.file = $(PREFIX)_gene_parameters.csv
 output.parameters.cells.file = $(PREFIX)_cell_parameters.csv
 
-// Only used when norms are estimted:
-output.parameters.genes1.file = $(PREFIX)_gene1_parameters.csv //Coarse
-output.parameters.genes2.file = $(PREFIX)_gene2_parameters.csv //Intermediate
-output.parameters.genes3.file = $(PREFIX)_gene3_parameters.csv //Final
-output.parameters.cells2.file = $(PREFIX)_cell2_parameters.csv //Intermediate
-output.parameters.cells3.file = $(PREFIX)_cell3_parameters.csv //Final
+// Only used when norms are estimated. This allows to track parameter values across iterations.
+//output.parameters.genes1.file = $(PREFIX)_gene1_parameters.csv //Coarse
+//output.parameters.genes2.file = $(PREFIX)_gene2_parameters.csv //Intermediate
+//output.parameters.genes3.file = $(PREFIX)_gene3_parameters.csv //Final
+//output.parameters.cells1.file = $(PREFIX)_cell1_parameters.csv //Initial
+//output.parameters.cells2.file = $(PREFIX)_cell2_parameters.csv //Intermediate
+//output.parameters.cells3.file = $(PREFIX)_cell3_parameters.csv //Final
 
-//Output:
 output.results.genes.file = $(PREFIX)_gene_results.csv
 output.results.genes_hessian.file = $(PREFIX)_gene_hessian.csv
 
-// Model-specific options
 
-//FP model:
-gene_distribution = Gamma //ScaledBeta
-alias_shape = yes
+
+//
+// Model-specific options
+//
+
+
 
 //EB model:
 nb_shape_categories = 30
@@ -56,6 +86,7 @@ output.results.mean.file = $(PREFIX)_mean_results.csv
 output.results.noise.file = $(PREFIX)_noise_results.csv
 
 //Cell partitions:
+alias_shape = yes
 cell_partition.file = None
 cell_partition.result.file = $(PREFIX)_partition_results.csv
 

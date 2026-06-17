@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2024 Julien Y. Dutheil
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Noise Inference from Single-Cell Expression (N.I.S.C.E.)
 
 NISCE fit models of gene expression in single cells to estimate parameters from count data using maximum likelihood.
@@ -46,4 +52,5 @@ make install
 
 ## Run the program
 
-TODO
+NISCE uses the BppO syntax from the Bio++ libraries. See the `example` subdirectory.
+
