@@ -39,4 +39,5 @@ Partitions are integers: cells with the same number are in the same cluster.
 nisce param=nisce_partition.bpp
 ```
 
-The output file are the same as for the simple model, excepted that there are cell and gene parameter files for each partition scheme (with file extensions `.part1`, `.part2`, etcThere is also a file named `S_paradoxus_CBS8841_rep1_Gamma_partition_results.csv`, which contains summary infos for each partition model (including AIC values).
+The output file are the same as for the simple model, excepted that there are cell and gene parameter files for each partition scheme (with file extensions `.part1`, `.part2`, etc.
+There is also a file named `S_paradoxus_CBS8841_rep1_Gamma_partition_results.csv`, which contains summary infos for each partition model (including AIC values).
