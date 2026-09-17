@@ -114,7 +114,7 @@ public:
       double s = accumulate(counts_[i].begin(), counts_[i].end(), 0.);
       for (size_t p = 0; p < partition_.size(); ++p)
       {
-        distParamValues_[i][2 * p] = s / static_cast<double>(nbCells_ - c);
+        distParamValues_[i][2 * p] = min(s / static_cast<double>(nbCells_ - c), 990.);
         distParamValues_[i][2 * p + 1] = 1.;
       }
     }

@@ -127,7 +127,7 @@ public:
       } else {
         rs_[i] = 0;
       }
-      distParamValues_[i][0] = min(s / static_cast<double>(nbCells_ - c), 999.);
+      distParamValues_[i][0] = min(s / static_cast<double>(nbCells_ - c), 990.);
       for (size_t j = 1; j < nbDistParams_; ++j)
       {
         distParamValues_[i][j] = 1.;

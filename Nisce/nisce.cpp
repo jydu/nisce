@@ -221,10 +221,10 @@ void help()
 int main(int argc, char* argv[])
 {
   cout << "******************************************************************" << endl;
-  cout << "*            <:o    N.I.S.C.E., version 1.0.0    o:>             *" << endl;
+  cout << "*            <:o    N.I.S.C.E., version 1.0.1    o:>             *" << endl;
   cout << "*                                                                *" << endl;
   cout << "* Author: J. Dutheil                        Created on  24/04/23 *" << endl;
-  cout << "*                                           Last Modif. 17/06/26 *" << endl;
+  cout << "*                                           Last Modif. 17/09/26 *" << endl;
   cout << "******************************************************************" << endl;
   cout << endl;
 
