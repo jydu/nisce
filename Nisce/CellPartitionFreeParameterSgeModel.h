@@ -56,7 +56,7 @@ public:
     shapeIsAliased_(false)
   {
     for (auto& p : partition_.partitionMap) {
-      distParamNames_.push_back(p.first + ".Mean");
+      distParamNames_.push_back(p.first + ".Scale");
       distParamNames_.push_back(p.first + ".Shape");
       distParamConstraints_.push_back(make_shared<IntervalConstraint>(0.01, 999, true, true));
       distParamConstraints_.push_back(make_shared<IntervalConstraint>(0.01, 999, true, true));
@@ -83,11 +83,11 @@ public:
   /**
    * @brief Recomputes the Discretized Poisson modulated PDF for a given gene.
    */
-  void computeCategories(size_t geneIndex, size_t partitionIndex, double mean, double shape)
+  void computeCategories(size_t geneIndex, size_t partitionIndex, double scale, double shape)
   {
     for (size_t k = 0; k < nbCategories_; ++k)
     {
-      distArray_[geneIndex][partitionIndex][k][0] = mean * (1. / shape) * boost::math::gamma_p_inv(shape, ((double)k + 0.5) / (double)nbCategories_); // We use the median as category value
+      distArray_[geneIndex][partitionIndex][k][0] = scale * (1. / shape) * boost::math::gamma_p_inv(shape, (static_cast<double>(k) + 0.5) / static_cast<double>(nbCategories_)); // We use the median as category value
       distArray_[geneIndex][partitionIndex][k][1] = 1. / static_cast<double>(nbCategories_);
     }
   }
@@ -312,7 +312,7 @@ public:
     out << "Gene";
     for (auto& p : partition_.partitionMap)
     {
-      out << "," << p.first << ".Mean," << p.first << ".Noise";
+      out << "," << p.first << ".Scale," << p.first << ".Noise";
     }
     out << endl;
 

@@ -221,10 +221,10 @@ void help()
 int main(int argc, char* argv[])
 {
   cout << "******************************************************************" << endl;
-  cout << "*            <:o    N.I.S.C.E., version 1.0.1    o:>             *" << endl;
+  cout << "*            <:o    N.I.S.C.E., version 1.1.0    o:>             *" << endl;
   cout << "*                                                                *" << endl;
   cout << "* Author: J. Dutheil                        Created on  24/04/23 *" << endl;
-  cout << "*                                           Last Modif. 17/09/26 *" << endl;
+  cout << "*                                           Last Modif. 20/11/26 *" << endl;
   cout << "******************************************************************" << endl;
   cout << endl;
 
@@ -842,6 +842,9 @@ int main(int argc, char* argv[])
       // Initialize parameters:
       size_t nbCategories = ApplicationTools::getParameter<size_t>("nb_categories", nisce.getParams(), 5);
 
+      bool aliasScale = ApplicationTools::getBooleanParameter("alias_scale", nisce.getParams(), false);
+      ApplicationTools::displayBooleanResult("Single scale parameter", aliasScale);
+      
       bool aliasShape = ApplicationTools::getBooleanParameter("alias_shape", nisce.getParams(), false);
       ApplicationTools::displayBooleanResult("Single shape parameter", aliasShape);
 
@@ -987,6 +990,10 @@ int main(int argc, char* argv[])
               opt[1].aliasShape = aliasShape;
               opt[2].aliasShape = aliasShape;
               opt[3].aliasShape = aliasShape;
+              opt[0].aliasScale = aliasScale;
+              opt[1].aliasScale = aliasScale;
+              opt[2].aliasScale = aliasScale;
+              opt[3].aliasScale = aliasScale;
             }
             else
             {
@@ -1003,6 +1010,7 @@ int main(int argc, char* argv[])
               if (opt[0].outputGenes != "none" && opt[0].outputGenes != "None")
                 opt[0].outputGenes += ".part" + TextTools::toString(p + 1);
               opt[0].aliasShape = aliasShape;
+              opt[0].aliasScale = aliasScale;
             }
 
             sgeModel->optimize(profiler, messenger, opt);
@@ -1036,6 +1044,23 @@ int main(int argc, char* argv[])
                       pnames.end(),
                       [](const string& name) {
                   return !name.ends_with("Shape");
+                }),
+                    pnames.end());
+                for (auto name : pnames)
+                {
+                  if (name != pnames[0])
+                  {
+                    f0->aliasParameters(pnames[0], name);
+                  }
+                }
+              }
+              if (aliasScale)
+              {
+                auto pnames = f0->getParameters().getParameterNames();
+                pnames.erase(remove_if(pnames.begin(),
+                      pnames.end(),
+                      [](const string& name) {
+                  return !name.ends_with("Scale");
                 }),
                     pnames.end());
                 for (auto name : pnames)

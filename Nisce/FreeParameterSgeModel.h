@@ -63,7 +63,7 @@ public:
     {
       nbDistParams_ = 2;
       distParamNames_.resize(nbDistParams_);
-      distParamNames_[0] = "Mean";
+      distParamNames_[0] = "Scale";
       distParamNames_[1] = "Shape";
       distParamConstraints_.resize(nbDistParams_);
       distParamConstraints_[0] = make_shared<IntervalConstraint>(0.01, 999, true, true);
@@ -165,11 +165,13 @@ public:
       throw DimensionException("Incorrect number of cell parameters.", cellParameters.getNumberOfRows(), nbCells_);
     }
 
-    // Dropout  
-    auto colR = geneParameters.getColumn("r");
-    for (size_t i  = 0; i < nbGenes_; ++i)
-    {
-      rs_[i] = TextTools::toDouble(colR[i]);
+    // Dropout
+    if (withDropout_) {  
+      auto colR = geneParameters.getColumn("r");
+      for (size_t i  = 0; i < nbGenes_; ++i)
+      {
+        rs_[i] = TextTools::toDouble(colR[i]);
+      }
     }
 
     // Distributions
@@ -183,10 +185,10 @@ public:
         distParamValues_[i][2] = TextTools::toDouble(colBeta[i]);
       }
     } else if (model_ == "Gamma") {
-      auto colMean = geneParameters.getColumn("Mean");
+      auto colScale = geneParameters.getColumn("Scale");
       auto colShape = geneParameters.getColumn("Shape");
       for (size_t i  = 0; i < nbGenes_; ++i) {
-        distParamValues_[i][0] = TextTools::toDouble(colMean[i]);
+        distParamValues_[i][0] = TextTools::toDouble(colScale[i]);
         distParamValues_[i][1] = TextTools::toDouble(colShape[i]);
       }
     } else {
@@ -516,7 +518,9 @@ public:
     void setParameters(const ParameterList& parameters) override
     {
       matchParametersValues(parameters);
-      r_ = parameter("r").getValue();
+      if (sgeModel_->withDropout_) {
+        r_ = parameter("r").getValue();
+      }
       for (size_t j = 0; j < sgeModel_->nbDistParams_; ++j)
       {
         distParams_[j] = parameter(sgeModel_->distParamNames_[j]).getValue();

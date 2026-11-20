@@ -254,6 +254,7 @@ public:
   bool estimateNorms;
   bool estimateHyperParameters;
   bool aliasShape;
+  bool aliasScale;
 };
 #endif //_SGE_MODEL_H_
 

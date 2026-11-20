@@ -70,7 +70,7 @@ public:
     {
       nbDistParams_ = 2;
       distParamNames_.resize(nbDistParams_);
-      distParamNames_[0] = "Mean";
+      distParamNames_[0] = "Scale";
       distParamNames_[1] = "Shape";
       distParamConstraints_.resize(nbDistParams_);
       distParamConstraints_[0] = make_shared<IntervalConstraint>(0.01, 999, true, true);
@@ -183,10 +183,10 @@ public:
         computeCategories(i, distParamValues_[i]);
       }
     } else if (model_ == "Gamma") {
-      auto colMean = geneParameters.getColumn("Mean");
+      auto colScale = geneParameters.getColumn("Scale");
       auto colShape = geneParameters.getColumn("Shape");
       for (size_t i  = 0; i < nbGenes_; ++i) {
-        distParamValues_[i][0] = TextTools::toDouble(colMean[i]);
+        distParamValues_[i][0] = TextTools::toDouble(colScale[i]);
         distParamValues_[i][1] = TextTools::toDouble(colShape[i]);
         computeCategories(i, distParamValues_[i]);
       }
