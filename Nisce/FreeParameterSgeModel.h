@@ -326,7 +326,7 @@ public:
         for (size_t k = 0; k < nbCategories_; ++k)
         {
           s[k] = dpoisson(counts_[i][j], distArray_[i][k][0] * l) * distArray_[i][k][1];
-          cout << k << ", counts = " << counts_[i][j] << ", disrArray = " << distArray_[i][k][0] <<  ", dpoisson = " << dpoisson(counts_[i][j], distArray_[i][k][0] * l) << endl;
+          cout << k << ", counts = " << counts_[i][j] << ", distArray = " << distArray_[i][k][0] <<  ", dpoisson = " << dpoisson(counts_[i][j], distArray_[i][k][0] * l) << endl;
         }
         auto S = accumulate(s.begin(), s.end(), 0.);
         double P;

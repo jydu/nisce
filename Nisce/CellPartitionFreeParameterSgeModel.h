@@ -36,6 +36,7 @@ public:
   std::vector<std::shared_ptr<ConstraintInterface>> distParamConstraints_;
   d2_array_dbl distParamValues_;
   d4_array_dbl distArray_;    // Intermediate calculations. Contains, for each gene, each partition elt, each category, two numbers: value and probability.
+  bool scaleIsAliased_;       // Record whether scales have been aliased during optimization to get the number of parameters right.
   bool shapeIsAliased_;       // Record whether shapes have been aliased during optimization to get the number of parameters right.
 
 public:
@@ -241,15 +242,14 @@ public:
   unsigned int getNumberOfParametersForGene(size_t i) const override
   {
     //Note: all genes have the same number of parameters
-    unsigned int np = 0;
+    unsigned int np = static_cast<unsigned int>(nbDistParams_);
+    if(scaleIsAliased_) {
+      np -= static_cast<unsigned int>(partition_.size());
+      np++; //Global scale
+    }
     if(shapeIsAliased_) {
-      np = static_cast<unsigned int>((nbDistParams_ - partition_.size()) + 1);
-      //                             |      mean only                  |   |
-      //                                                                   | shape
-      //
-    } else {
-      np =  static_cast<unsigned int>(nbDistParams_);
-      //                            |mean and shape|
+      np -= static_cast<unsigned int>(partition_.size());
+      np++; //Global shape
     }
     if (withDropout_) {
       np++;
@@ -467,6 +467,23 @@ public:
                 [&](size_t i)
       {
         auto f = make_shared<GeneLikelihood>(shared_from_this(), i);
+        if (ppt.aliasScale) {
+          scaleIsAliased_ = true;
+          auto pnames = f->getParameters().getParameterNames();
+          pnames.erase(remove_if(pnames.begin(),
+                                 pnames.end(),
+                                 [](const string& name) {
+                                   return(!name.ends_with("Scale"));
+                                 }),
+                       pnames.end());
+          for (auto name : pnames) {
+            if (name != pnames[0] ) {
+              f->aliasParameters(pnames[0], name);
+            }
+          }
+        } else {
+          scaleIsAliased_ = false;
+        }
         if (ppt.aliasShape) {
           shapeIsAliased_ = true;
           auto pnames = f->getParameters().getParameterNames();
@@ -482,7 +499,7 @@ public:
             }
           }
         } else {
-          shapeIsAliased_ = true;
+          shapeIsAliased_ = false;
         }
         auto optimizer = make_unique<PowellMultiDimensions>(f);
         optimizer->setStopCondition(make_shared<FunctionStopCondition>(optimizer.get()));
