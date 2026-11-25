@@ -378,7 +378,7 @@ public:
     out << "Gene";
     for (auto& p : partition_.partitionMap)
     {
-      out << "," << p.first << ".Scale," << p.first << ".Noise";
+      out << "," << p.first << ".Mean," << p.first << ".Noise";
     }
     out << endl;
 
