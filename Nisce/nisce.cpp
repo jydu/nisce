@@ -834,9 +834,19 @@ int main(int argc, char* argv[])
           cout << "Cell " << cellsInPartitions[i - 1] << " was ignored." << endl;
         }
       }
+      cellsInPartitions = partitions->getRowNames();
       if (partitions->getNumberOfRows() == 0)
       {
         throw Exception("Error!!! The cell names in the partition file do not match those in the count file.");
+      }
+      // Now discard the data that does not belong to any partition:
+      for (size_t j = cellIds.size(); j > 0; --j)
+      {
+	auto cell = cellIds[j - 1];
+        if (!VectorTools::contains(cellsInPartitions, cell))
+        {
+          throw Exception("Cell " + cell + " was not assigned any partition.");
+        }
       }
 
       // Initialize parameters:
